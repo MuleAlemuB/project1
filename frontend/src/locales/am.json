@@ -1,0 +1,31 @@
+{
+  "home": {
+    "welcome": "ወደ ደብረ ታቦር ዩኒቨርሲቲ የሰራተኞች አስተዳደር ስርዓት እንኳን ደህና መጡ",
+    "description": "ሰራተኞችን፣ አቴንዳንስን፣ ፈቃዶችን፣ ባዶ ስፍራዎችን እና በአንድ ስርዓት ሌሎችንም በቀላሉ አስተዳደር ያደርጉ።",
+    "getStarted": "መጀመር",
+    "features": {
+      "employeeManagement": "የሰራተኞች አስተዳደር",
+      "employeeManagementDesc": "የሰራተኞችን መረጃ ቀላል ለማስተካከልና ለመከታተል ይችላሉ።",
+      "attendanceTracking": "አቴንዳንስ አስተዳደር",
+      "attendanceTrackingDesc": "አቴንዳንስን በቀላሉ ተከታትለው እንዲሰሩ ይከታተሉ።",
+      "leaveVacancy": "ፈቃድና ባዶ ስፍራ አስተዳደር",
+      "leaveVacancyDesc": "ፈቃድ ይጠይቁና ይፈቀዱ፣ ባዶ ስፍራዎችን በስርዓቱ ውስጥ ይልቁት።"
+    },
+    "footer": "© 2025 ደብረ ታቦር ዩኒቨርሲቲ የሰራተኞች አስተዳደር ስርዓት። መብቶች ሁሉ የተጠበቀ ናቸው።"
+  },
+  "login": {
+    "title": "ግባ",
+    "email": "ኢሜይል",
+    "password": "የሚስጥር ቃል",
+    "role": "ተጠቃሚ ሚና",
+    "loginButton": "ግባ"
+  },
+  "dashboard": {
+    "welcome": "እንኳን ደህና መጡ, {{name}}!",
+    "totalEmployees": "አጠቃላይ ሰራተኞች",
+    "totalDepartments": "አጠቃላይ ክፍሎች",
+    "totalVacancies": "አጠቃላይ ባዶ ስፍራዎች",
+    "leaveRequests": "የፈቃድ ጥያቄዎች",
+    "absentAlerts": "3 ቀን በላይ እንደገና ያሉ ሰራተኞች"
+  }
+}

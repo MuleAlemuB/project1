@@ -1,0 +1,140 @@
+import Employee from "../models/Employee.js";
+import asyncHandler from "express-async-handler";
+import bcrypt from "bcrypt";
+import Department from "../models/Department.js";
+
+// -------------------- Create Employee --------------------
+export const createEmployee = asyncHandler(async (req, res) => {
+  const data = { ...req.body };
+  if (req.file) data.photo = `uploads/photos/${req.file.filename}`;
+
+  const employee = await Employee.create(data);
+  res.status(201).json(employee);
+});
+
+// -------------------- Get All Employees --------------------
+export const getEmployees = asyncHandler(async (req, res) => {
+  const employees = await Employee.find().populate("department", "name");
+  res.json(employees);
+});
+
+// -------------------- Get Single Employee --------------------
+export const getEmployeeById = asyncHandler(async (req, res) => {
+  const employee = await Employee.findById(req.params.id).populate("department", "name");
+  if (!employee) return res.status(404).json({ message: "Employee not found" });
+  res.json(employee);
+});
+
+// -------------------- Update Employee --------------------
+export const updateEmployee = asyncHandler(async (req, res) => {
+  const data = { ...req.body };
+if (req.file) data.photo = `uploads/photos/${req.file.filename}`;
+
+
+  const employee = await Employee.findByIdAndUpdate(req.params.id, data, { new: true }).populate("department", "name");
+  res.json(employee);
+});
+
+// -------------------- Delete Employee --------------------
+export const deleteEmployee = asyncHandler(async (req, res) => {
+  await Employee.findByIdAndDelete(req.params.id);
+  res.json({ message: "Employee deleted" });
+});
+
+// -------------------- Get Logged-in Employee Profile --------------------
+export const getMyProfile = asyncHandler(async (req, res) => {
+  const employee = await Employee.findById(req.user._id).select('-password').populate("department", "name");
+  if (!employee) {
+    res.status(404);
+    throw new Error('Employee not found');
+  }
+  res.json(employee);
+});
+
+// -------------------- Get Employees by DeptHead's Department --------------------
+export const getEmployeesByDepartment = async (req, res) => {
+  const departmentId = req.query.department; 
+
+  if (!departmentId) {
+    return res.status(400).json({ message: "Department ID required" });
+  }
+
+  try {
+    // Validate that department exists
+    const department = await Department.findById(departmentId);
+    if (!department) {
+      return res.status(404).json({ message: "Department not found" });
+    }
+
+    // Fetch employees by department ObjectId
+    const employees = await Employee.find({ department: departmentId })
+      .populate("department", "name");
+
+    if (!employees.length) {
+      return res.status(404).json({ message: "No employees found" });
+    }
+
+    res.json(employees);
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+// -------------------- Employee Dashboard Route --------------------
+export const getEmployeeDashboard = asyncHandler(async (req, res) => {
+  const employee = await Employee.findById(req.user._id).populate("department", "name");
+  if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+  // Send every field except password
+  const dashboardData = {
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    email: employee.email,
+    phoneNumber: employee.phoneNumber,
+    department: employee.department?.name || "-",
+    typeOfPosition: employee.typeOfPosition,
+    empId: employee.empId,
+    salary: employee.salary,
+    experience: employee.experience,
+    contactPerson: employee.contactPerson,
+    contactPersonAddress: employee.contactPersonAddress,
+    employeeStatus: employee.employeeStatus,
+    leaveBalance: employee.leaveBalance || 0,
+    requisitionsPending: employee.requisitionsPending || 0,
+    placementStatus: employee.placementStatus || "Not Placed",
+    photo: employee.photo || null,
+    profileCompleted: Math.round(
+      ((employee.firstName && employee.lastName && employee.email) ? 100 : 50)
+    ),
+  };
+
+  res.json(dashboardData);
+});
+// -------------------- Employee Updates Password Only --------------------
+export const updatePassword = asyncHandler(async (req, res) => {
+  const employeeId = req.user._id; // coming from authMiddleware's `protect`
+  const { currentPassword, newPassword } = req.body;
+
+  const employee = await Employee.findById(employeeId);
+
+  if (!employee) {
+    res.status(404);
+    throw new Error("Employee not found");
+  }
+
+  // Check current password
+  const isMatch = await bcrypt.compare(currentPassword, employee.password);
+  if (!isMatch) {
+    res.status(400);
+    throw new Error("Current password is incorrect");
+  }
+
+  // Update password
+  const salt = await bcrypt.genSalt(10);
+  employee.password = await bcrypt.hash(newPassword, salt);
+  await employee.save();
+
+  res.status(200).json({ message: "Password updated successfully" });
+});

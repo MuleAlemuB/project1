@@ -1,0 +1,31 @@
+{
+  "home": {
+    "welcome": "Welcome to Debre Tabor University HR Management System",
+    "description": "Efficiently manage employees, attendance, leave requests, vacancies, and more all in one platform.",
+    "getStarted": "Get Started",
+    "features": {
+      "employeeManagement": "Employee Management",
+      "employeeManagementDesc": "Easily add, update, and track employee records to keep your workforce organized.",
+      "attendanceTracking": "Attendance Tracking",
+      "attendanceTrackingDesc": "Monitor attendance efficiently to keep your team productive and accountable.",
+      "leaveVacancy": "Leave & Vacancy Management",
+      "leaveVacancyDesc": "Submit and approve leave requests, and post vacancies all within one system."
+    },
+    "footer": "© 2025 Debre Tabor University Employee Management System. All rights reserved."
+  },
+  "login": {
+    "title": "Login",
+    "email": "Email",
+    "password": "Password",
+    "role": "Role",
+    "loginButton": "Login"
+  },
+  "dashboard": {
+    "welcome": "Welcome, {{name}}!",
+    "totalEmployees": "Total Employees",
+    "totalDepartments": "Total Departments",
+    "totalVacancies": "Total Vacancies",
+    "leaveRequests": "Leave Requests",
+    "absentAlerts": "Employees ≥3 Absences"
+  }
+}
