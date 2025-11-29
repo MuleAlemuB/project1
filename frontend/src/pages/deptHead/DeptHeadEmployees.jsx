@@ -128,7 +128,7 @@ const DeptHeadEmployees = () => {
   ...emp,
   departmentName: emp.department?.name || "N/A",
   phone: emp.phone || emp.phoneNumber || "N/A",
-  photo: emp.photo ? `/${emp.photo}` : null,
+  photo: emp.photo ? `${BACKEND_URL}/${emp.photo}` : null, // full URL
 }));
 
         setEmployees(employeesWithDetails);
@@ -264,15 +264,11 @@ const DeptHeadEmployees = () => {
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl"
             >
               <img
-                      src={
-  emp.photo
-    ? `http://localhost:5000${emp.photo}`
-    : "/fallback-avatar.png"
-}
+  src={emp.photo || "/fallback-avatar.png"}
+  alt="Employee"
+  className="w-12 h-12 rounded-full object-cover"
+/>
 
-                      alt="Employee"
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
 
               <h2 className="text-xl font-semibold mb-1">
                 {emp.firstName} {emp.lastName}
@@ -324,13 +320,10 @@ const DeptHeadEmployees = () => {
 
             <div className="flex flex-col items-center">
               <img
-  src={
-    emp.photo
-      ? `${BACKEND_URL}${emp.photo}`
-      : "/fallback-avatar.png"
-  }
+  src={selectedEmployee.photo || "/fallback-avatar.png"}
   className="w-16 h-16 rounded-full object-cover"
 />
+
 
               <h2 className="text-3xl font-bold text-indigo-600 mb-1">
                 {selectedEmployee.firstName} {selectedEmployee.lastName}

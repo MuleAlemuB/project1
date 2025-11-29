@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext"; // darkMode and language context
 import axiosInstance from "../../utils/axiosInstance";
-import { FaFilePdf, FaFileExcel, FaUsers, FaFileAlt, FaClipboardList, FaBullhorn } from "react-icons/fa";
+import { FaUsers, FaFilePdf, FaFileExcel } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -36,15 +36,9 @@ const AdminReports = () => {
   const texts = {
     en: {
       totalEmployees: "Total Employees",
-      totalRequisitions: "Total Requisitions",
-      totalLeaves: "Total Leaves",
-      totalAnnouncements: "Total Announcements",
-      employeesAdded: "Employees Added",
       employeeReports: "Employee Reports",
       downloadPDF: "Download PDF",
       downloadExcel: "Download Excel",
-      resetCounters: "Reset 3-Month Counters",
-      confirmReset: "Are you sure you want to reset the 3-month counters?",
       noEmployeeData: "No employee data available.",
       photo: "Photo",
       firstName: "First Name",
@@ -71,15 +65,9 @@ const AdminReports = () => {
     },
     am: {
       totalEmployees: "አጠቃላይ ሰራተኞች",
-      totalRequisitions: "አጠቃላይ ጥያቄዎች",
-      totalLeaves: "አጠቃላይ ፈቃዶች",
-      totalAnnouncements: "አጠቃላይ ማስታወቂያዎች",
-      employeesAdded: "ተጨማሪ ሰራተኞች",
       employeeReports: "የሰራተኞች ሪፖርት",
       downloadPDF: "PDF አውርድ",
       downloadExcel: "Excel አውርድ",
-      resetCounters: "የ3 ወር ቆጣሪ ዳግም ማስተካከያ",
-      confirmReset: "3 ወር ቆጣሪዎችን ማስወገድ እርግጠኛ ነህ?",
       noEmployeeData: "ምንም የሰራተኞች መረጃ የለም።",
       photo: "ፎቶ",
       firstName: "ስም",
@@ -125,12 +113,8 @@ const AdminReports = () => {
       try {
         const { data } = await axiosInstance.get("/reports/admin");
         setReport(Array.isArray(data.employees) ? data.employees : []);
-        setSummary(data.summary || {
+        setSummary({
           totalEmployees: data.employees?.length || 0,
-          totalLeaves: 0,
-          totalRequisitions: 0,
-          totalAnnouncements: 0,
-          totalEmployeesAdded: 0,
         });
       } catch (err) {
         console.error("Report fetch error:", err);
@@ -165,9 +149,6 @@ const AdminReports = () => {
     doc.text("DTU HRMS Employee Report", 40, 40);
     doc.setFontSize(12);
     doc.text(`${t.totalEmployees}: ${summary.totalEmployees || 0}`, 40, 70);
-    doc.text(`${t.totalRequisitions}: ${summary.totalRequisitions || 0}`, 200, 70);
-    doc.text(`${t.totalLeaves}: ${summary.totalLeaves || 0}`, 400, 70);
-    doc.text(`${t.totalAnnouncements}: ${summary.totalAnnouncements || 0}`, 600, 70);
 
     autoTable(doc, {
       head: [tableColumn],
@@ -185,9 +166,6 @@ const AdminReports = () => {
   const exportExcel = () => {
     const totalsRow = [{
       [t.firstName]: `${t.totalEmployees}: ${summary.totalEmployees || 0}`,
-      [t.middleName]: `${t.totalRequisitions}: ${summary.totalRequisitions || 0}`,
-      [t.lastName]: `${t.totalLeaves}: ${summary.totalLeaves || 0}`,
-      [t.email]: `${t.totalAnnouncements}: ${summary.totalAnnouncements || 0}`,
     }];
 
     const worksheet = XLSX.utils.json_to_sheet([
@@ -227,32 +205,12 @@ const AdminReports = () => {
 
   return (
     <div className={`${darkMode ? "bg-gray-900 text-gray-200" : "bg-gray-50 text-gray-900"} p-6 min-h-screen transition-colors duration-300`}>
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      {/* Summary Card: Only Total Employees */}
+      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
           <FaUsers className="text-4xl text-indigo-500 mb-2" />
           <span>{t.totalEmployees}</span>
           <span className="text-2xl font-bold">{summary.totalEmployees || 0}</span>
-        </div>
-        <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
-          <FaClipboardList className="text-4xl text-green-500 mb-2" />
-          <span>{t.totalRequisitions}</span>
-          <span className="text-2xl font-bold">{summary.totalRequisitions || 0}</span>
-        </div>
-        <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
-          <FaFileAlt className="text-4xl text-yellow-500 mb-2" />
-          <span>{t.totalLeaves}</span>
-          <span className="text-2xl font-bold">{summary.totalLeaves || 0}</span>
-        </div>
-        <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
-          <FaBullhorn className="text-4xl text-red-500 mb-2" />
-          <span>{t.totalAnnouncements}</span>
-          <span className="text-2xl font-bold">{summary.totalAnnouncements || 0}</span>
-        </div>
-        <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
-          <FaUsers className="text-4xl text-purple-500 mb-2" />
-          <span>{t.employeesAdded}</span>
-          <span className="text-2xl font-bold">{summary.totalEmployeesAdded || 0}</span>
         </div>
       </div>
 

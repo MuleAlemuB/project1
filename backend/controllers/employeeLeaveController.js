@@ -5,59 +5,31 @@ import Notification from "../models/Notification.js";
 
 // ---------------- Employee submits leave request ----------------
 export const createEmployeeLeaveRequest = asyncHandler(async (req, res) => {
-  const { startDate, endDate, reason } = req.body;
-
-  if (!startDate || !endDate || !reason) {
-    res.status(400);
-    throw new Error("All fields are required");
-  }
-
   const employee = req.user;
-  if (!employee) {
-    res.status(401);
-    throw new Error("User not found");
-  }
 
-  const attachments = req.files?.map((file) => file.path) || [];
-
-  const leaveRequest = await LeaveRequest.create({
-    employee: employee._id,
-    employeeEmail: employee.email,
-    employeeName: `${employee.firstName} ${employee.middleName || ""} ${employee.lastName}`,
-    department: employee.department?.name || "Unknown",
-    role: employee.role,
-    startDate,
-    endDate,
-    reason,
-    attachments,
-    status: "pending",
+  const leave = await LeaveRequest.create({
+    requester: employee._id,
+    requesterModel: "Employee",
+    requesterRole: "employee",
+    targetRole: "departmenthead",
+    department: employee.department,
+    requesterName: employee.name,
+    requesterEmail: employee.email,
+    ...req.body,
+    attachments: req.files?.map(f => f.filename),
   });
 
-  // Notification to DeptHead
-  await Notification.create({
-    type: "Leave",
-    message: `${employee.firstName} ${employee.lastName} requested leave from ${startDate} to ${endDate}`,
-    recipientRole: "DepartmentHead",
-    department: employee.department?.name,
-    status: "pending",
-    employee: { name: `${employee.firstName} ${employee.lastName}`, email: employee.email },
-    leaveRequestId: leaveRequest._id,
-  });
-
-  res.status(201).json({ leaveRequest, message: "Leave request sent to DeptHead" });
+  res.json({ message: "Leave request sent to Department Head", leave });
 });
 
 // ---------------- Get all leave requests for DeptHead ----------------
 export const getDeptHeadLeaveRequests = asyncHandler(async (req, res) => {
-  const user = req.user;
+  const requests = await LeaveRequest.find({
+    targetRole: "departmenthead",
+    department: req.user.department,
+  }).sort({ createdAt: -1 });
 
-  if (user.role.toLowerCase() !== "departmenthead") {
-    res.status(403);
-    throw new Error("Not authorized");
-  }
-
-  const leaveRequests = await LeaveRequest.find({ department: user.department.name }).sort({ createdAt: -1 });
-  res.json(leaveRequests);
+  res.json(requests);
 });
 
 // ---------------- DeptHead Approve/Reject leave request ----------------

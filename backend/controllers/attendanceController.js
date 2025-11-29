@@ -28,15 +28,25 @@ export const bulkAttendance = asyncHandler(async (req, res) => {
     results.push(att);
 
     if (rec.status === "Absent") {
-      const totalAbsences = await Attendance.countDocuments({
+      // Check for 7 consecutive absences including today
+      const today = new Date(rec.date);
+      const past6Dates = [];
+      for (let i = 1; i <= 6; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        past6Dates.push(d.toISOString().split("T")[0]); // YYYY-MM-DD
+      }
+
+      const past6Absences = await Attendance.find({
         employeeId: rec.employeeId,
+        date: { $in: past6Dates },
         status: "Absent",
       });
 
-      if (totalAbsences >= 5) {
+      if (past6Absences.length === 6) {
         await Notification.create({
-          title: `Employee ${employee.firstName} ${employee.lastName} has ${totalAbsences} absences`,
-          message: `Employee ${employee.firstName} ${employee.lastName} from ${deptId} department has been absent for ${totalAbsences} days.`,
+          title: `Employee ${employee.firstName} ${employee.lastName} absent 7 consecutive days`,
+          message: `Employee ${employee.firstName} ${employee.lastName} from department ${deptId} has been absent for 7 consecutive days.`,
           recipientRole: "admin",
           read: false,
         });
@@ -46,6 +56,8 @@ export const bulkAttendance = asyncHandler(async (req, res) => {
 
   res.json(results);
 });
+
+
 
 // ✅ Get attendance for a department on a specific date
 export const getDepartmentAttendance = asyncHandler(async (req, res) => {

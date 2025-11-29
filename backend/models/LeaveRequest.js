@@ -1,21 +1,21 @@
-// backend/models/LeaveRequest.js
 import mongoose from "mongoose";
 
-const leaveRequestSchema = mongoose.Schema(
+const leaveRequestSchema = new mongoose.Schema(
   {
-    employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-    employeeEmail: { type: String, required: true }, // <-- ADD THIS
-    department: { type: String, required: true }, 
-    employeeName: { type: String, required: true },
-    reason: { type: String, required: true },
+    requester: { type: mongoose.Schema.Types.ObjectId, refPath: "requesterModel", required: true },
+    requesterModel: { type: String, enum: ["User", "Employee"], required: true },
+    requesterRole: { type: String, enum: ["Employee", "DepartmentHead"], required: true },
+    targetRole: { type: String, enum: ["DepartmentHead", "Admin"], required: true },
+    requesterName: { type: String, required: true },
+    requesterEmail: { type: String, required: true },
+    department: { type: String },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },
-    status: { type: String, default: "pending" },
+    reason: { type: String, required: true },
     attachments: [{ type: String }],
-    role: { type: String },
+    status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
   },
   { timestamps: true }
 );
 
-const LeaveRequest = mongoose.model("LeaveRequest", leaveRequestSchema);
-export default LeaveRequest;
+export default mongoose.model("LeaveRequest", leaveRequestSchema);

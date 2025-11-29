@@ -80,9 +80,11 @@ const DeptHeadAttendance = () => {
   const [employeeAbsentModal, setEmployeeAbsentModal] = useState(false);
   const [selectedEmployeeAbsentDates, setSelectedEmployeeAbsentDates] = useState([]);
   const [selectedEmployeeName, setSelectedEmployeeName] = useState("");
+  const [submittedToday, setSubmittedToday] = useState(false);
 
   const statusOptions = ["Present", "Absent", "Late", "Excused"];
 
+  // Fetch employees and attendance
   useEffect(() => {
     if (authLoading) return;
     if (!user?.department) {
@@ -93,20 +95,27 @@ const DeptHeadAttendance = () => {
     const fetchData = async () => {
       try {
         const today = new Date().toISOString().split("T")[0];
+
+        // Fetch department employees
         const res = await axios.get(`/employees/department?department=${user.department}`);
         const deptEmps = res.data || [];
         setEmployees(deptEmps);
 
+        // Initialize attendance form
         const initialForm = {};
         deptEmps.forEach(emp => { initialForm[emp._id] = "Absent"; });
 
+        // Fetch today's attendance
         const attRes = await axios.get(`/attendance?department=${user.department}&date=${today}`);
+        if (attRes.data.length > 0) setSubmittedToday(true);
+
         attRes.data.forEach(record => {
           initialForm[record.employeeId] = record.status;
         });
 
         setAttendanceForm(initialForm);
 
+        // Fetch history
         const histRes = await axios.get(`/attendance/history?department=${user.department}`);
         setHistory(histRes.data || []);
       } catch (err) {
@@ -142,14 +151,16 @@ const DeptHeadAttendance = () => {
 
       let alertMessage = "";
       employees.forEach(emp => {
-        const absences = res.data.filter(
-          a => a.employeeId === emp._id && a.status === "Absent"
-        ).length;
-        if (absences >= 3)
-          alertMessage += `⚠️ ${emp.firstName} ${emp.lastName} reached 3 absences. Notify HR!\n`;
+        const empRecords = res.data.filter(r => r.employeeId === emp._id && r.status === "Absent");
+        if (empRecords.length > 0) {
+          alertMessage += `⚠️ ${emp.firstName} ${emp.lastName} absent today.\n`;
+        }
       });
 
       setMessage(alertMessage || t.attendanceSubmitted);
+
+      // Disable button after submission
+      setSubmittedToday(true);
     } catch (err) {
       console.error(err);
       setMessage(t.attendanceFailed);
@@ -186,6 +197,7 @@ const DeptHeadAttendance = () => {
       setMessage(t.attendanceResetSuccess);
       const histRes = await axios.get(`/attendance/history?department=${user.department}`);
       setHistory(histRes.data || []);
+      setSubmittedToday(false); // reset button state after reset
     } catch (err) {
       console.error(err);
       setMessage(t.attendanceResetFailed);
@@ -315,16 +327,11 @@ const DeptHeadAttendance = () => {
                   {filteredEmployees.map(emp => (
                     <tr key={emp._id} className="border-b hover:bg-gray-600">
                       <td className="p-2">
-                         <img
-                      src={
-  emp.photo
-    ? `http://localhost:5000${emp.photo}`
-    : "/fallback-avatar.png"
-}
-
-                      alt="Employee"
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
+                        <img
+                          src={emp.photo ? `http://localhost:5000${emp.photo}` : "/fallback-avatar.png"}
+                          alt="Employee"
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
                       </td>
                       <td className="p-2">{emp.firstName} {emp.lastName}</td>
                       <td className="p-2">
@@ -354,9 +361,11 @@ const DeptHeadAttendance = () => {
             <div className="mt-4 flex justify-center">
               <button
                 type="submit"
-                className="bg-blue-500 text-white px-6 py-2 rounded font-bold hover:bg-blue-600 transition"
+                disabled={submittedToday}
+                className={`bg-blue-500 text-white px-6 py-2 rounded font-bold hover:bg-blue-600 transition ${submittedToday ? "opacity-50 cursor-not-allowed" : ""}`}
+                title={submittedToday ? "Attendance already submitted for today" : ""}
               >
-                {t.submitAttendance}
+                {submittedToday ? "Attendance Submitted" : t.submitAttendance}
               </button>
             </div>
           </form>
@@ -372,22 +381,17 @@ const DeptHeadAttendance = () => {
               {viewAbsent.length === 0 && <p>{t.noAbsentees}</p>}
               {viewAbsent.map(emp => (
                 <div key={emp._id} className="flex items-center gap-3 mb-2">
-                   <img
-                      src={
-  emp.photo
-    ? `http://localhost:5000${emp.photo}`
-    : "/fallback-avatar.png"
-}
-
-                      alt="Employee"
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
+                  <img
+                    src={emp.photo ? `http://localhost:5000${emp.photo}` : "/fallback-avatar.png"}
+                    alt="Employee"
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
                   <span>{emp.firstName} {emp.lastName}</span>
                 </div>
               ))}
             </div>
             <button
-              className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+              className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
               onClick={() => setShowAbsentModal(false)}
             >
               {t.close}
@@ -396,19 +400,19 @@ const DeptHeadAttendance = () => {
         </div>
       )}
 
-      {/* Employee absent details modal */}
+      {/* Employee absent modal */}
       {employeeAbsentModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
           <div className="bg-white dark:bg-gray-800 p-6 rounded shadow-lg max-w-md w-full text-gray-900 dark:text-gray-100">
             <h3 className="text-xl font-bold mb-4">{t.absentDaysTitle} {selectedEmployeeName}</h3>
-            <div className="max-h-64 overflow-y-auto">
-              {selectedEmployeeAbsentDates.length === 0 && <p>{t.noAbsencesRecorded}</p>}
-              {selectedEmployeeAbsentDates.map((date, index) => (
-                <p key={index} className="mb-1">{date}</p>
+            {selectedEmployeeAbsentDates.length === 0 && <p>{t.noAbsencesRecorded}</p>}
+            <ul className="list-disc pl-5 max-h-64 overflow-y-auto">
+              {selectedEmployeeAbsentDates.map(date => (
+                <li key={date}>{new Date(date).toLocaleDateString()}</li>
               ))}
-            </div>
+            </ul>
             <button
-              className="mt-4 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+              className="mt-4 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
               onClick={() => setEmployeeAbsentModal(false)}
             >
               {t.close}

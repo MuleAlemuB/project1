@@ -10,17 +10,14 @@ const notificationSchema = new mongoose.Schema(
         "Reminder",
         "Requisition",
         "Vacancy Application",
-        "Leave", // employee leave request
-        "EmployeeLeaveApplied", // when employee applies leave
+        "Leave",
+        "EmployeeLeaveApplied",
       ],
       required: true,
     },
     message: { type: String, required: true },
     seen: { type: Boolean, default: false },
-    
-    // Reference should be a string for IDs
-    reference: { type: String }, // <-- changed from object to string
-
+    reference: { type: String }, // Generic reference field
     applicant: {
       name: String,
       email: String,
@@ -35,12 +32,12 @@ const notificationSchema = new mongoose.Schema(
       name: String,
       email: String,
     },
-    
     recipientRole: {
-  type: String,
-  enum: ["Admin", "DepartmentHead", "Employee"], // capitalized
-  default: "Admin",
-},
+      type: String,
+      enum: ["Admin", "DepartmentHead", "Employee"], // Capitalized
+      required: true,
+      default: "Admin",
+    },
     leaveRequestId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "LeaveRequest",

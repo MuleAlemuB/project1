@@ -8,21 +8,27 @@ export const createApplication = async (req, res) => {
     const vacancy = await Vacancy.findById(vacancyId);
     if (!vacancy) return res.status(404).json({ message: "Vacancy not found" });
 
-    const newApplication = await Application.create({ name, email, phone, vacancy: vacancyId });
+    const resume = req.file ? req.file.path : null; // ✅ ADD
 
-    // create admin notification
+    const newApplication = await Application.create({
+      name,
+      email,
+      phone,
+      vacancy: vacancyId,
+      resume, // ✅ ADD
+    });
+
     await Notification.create({
       type: "Vacancy Application",
       message: `${name} applied for "${vacancy.position}"`,
       seen: false,
-      applicant: { name, email, phone },
+      applicant: { name, email, phone, resume }, // ✅ ADD
       vacancy: { title: vacancy.position, department: vacancy.department },
-      recipientRole: "Admin"
+      recipientRole: "Admin",
     });
 
     res.status(201).json({ message: "Application submitted", application: newApplication });
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: err.message });
   }
 };

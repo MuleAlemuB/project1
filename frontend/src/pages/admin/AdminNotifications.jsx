@@ -1,31 +1,131 @@
 // src/pages/admin/AdminNotifications.jsx
 import React, { useEffect, useState } from "react";
 import axiosInstance from "../../utils/axiosInstance";
-import { FaBell, FaTrash, FaCheck, FaInfoCircle, FaThumbsUp, FaThumbsDown, FaFile } from "react-icons/fa";
+import {
+  FaBell,
+  FaTrash,
+  FaCheck,
+  FaInfoCircle,
+  FaThumbsUp,
+  FaThumbsDown,
+  FaDownload,
+} from "react-icons/fa";
 import { motion } from "framer-motion";
+import { useSettings } from "../../contexts/SettingsContext"; // <-- import context
+
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+// ---------- helpers ----------
+const fileUrl = (path) =>
+  path ? `${API_BASE}/${path.replace(/\\/g, "/")}` : "#";
+
+const formatDate = (date) =>
+  date ? new Date(date).toLocaleDateString() : "-";
+
+const calculateDays = (start, end) => {
+  if (!start || !end) return "-";
+  return (
+    Math.ceil((new Date(end) - new Date(start)) / (1000 * 3600 * 24)) + 1
+  );
+};
+
+// ---------- Translations ----------
+const translations = {
+  en: {
+    adminNotifications: "Admin Notifications",
+    loading: "Loading notifications...",
+    type: "Type",
+    status: "Status",
+    applicantInformation: "Applicant Information",
+    name: "Name",
+    email: "Email",
+    phone: "Phone",
+    appliedAt: "Applied At",
+    downloadCV: "Download CV",
+    leaveRequest: "Leave Request",
+    employee: "Employee",
+    start: "Start",
+    end: "End",
+    duration: "Duration",
+    reason: "Reason",
+    attachment: "Attachment",
+    requisitionDetails: "Requisition Details",
+    position: "Position",
+    department: "Department",
+    education: "Education",
+    quantity: "Quantity",
+    term: "Term",
+    sex: "Sex",
+    experience: "Experience",
+    date: "Date",
+    view: "View",
+    seen: "Seen",
+    delete: "Delete",
+    accept: "Accept",
+    reject: "Reject",
+  },
+  am: {
+    adminNotifications: "አስተዳደር ማሳወቂያዎች",
+    loading: "ማሳወቂያዎች እየጫኑ ነው...",
+    type: "አይነት",
+    status: "ሁኔታ",
+    applicantInformation: "የማመልከቻ መረጃ",
+    name: "ስም",
+    email: "ኢሜይል",
+    phone: "ስልክ",
+    appliedAt: "በመተግበሪያ ቀን",
+    downloadCV: "CV አውርድ",
+    leaveRequest: "የተከለው ጉዳይ መረጃ",
+    employee: "ሰራተኛ",
+    start: "መጀመሪያ",
+    end: "መጨረሻ",
+    duration: "ቆይታ",
+    reason: "ምክንያት",
+    attachment: "አቀማመጥ",
+    requisitionDetails: "የማስፈላጊ መረጃ",
+    position: "ስራ ቦታ",
+    department: "ክፍል",
+    education: "ትምህርት",
+    quantity: "ብዛት",
+    term: "የሥራ ጊዜ",
+    sex: "ፆታ",
+    experience: "ልምድ",
+    date: "ቀን",
+    view: "እይ",
+    seen: "ተመለከተ",
+    delete: "አስወግድ",
+    accept: "አረጋግጥ",
+    reject: "አልተፈቀደም",
+  },
+};
 
 const AdminNotifications = () => {
+  const { language } = useSettings(); // get language from context
+  const t = translations[language]; // current translation
+
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState({});
+  const [requisitionDetails, setRequisitionDetails] = useState({});
 
-  // Load persisted states from localStorage
+  // ---------- Load notifications ----------
   useEffect(() => {
     const seenState = JSON.parse(localStorage.getItem("notifSeen") || "{}");
-    const detailsState = JSON.parse(localStorage.getItem("notifDetails") || "{}");
+    const detailsState = JSON.parse(
+      localStorage.getItem("notifDetails") || "{}"
+    );
     setDetailsOpen(detailsState);
 
     const fetchNotifications = async () => {
       try {
         const res = await axiosInstance.get("/notifications/my");
-        // Merge persisted 'seen' state
         const merged = res.data.map((n) => ({
           ...n,
-          seen: seenState[n._id] !== undefined ? seenState[n._id] : n.seen,
+          seen: seenState[n._id] ?? n.seen,
         }));
         setNotifications(merged);
       } catch (err) {
-        console.error("Failed to fetch notifications:", err);
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -34,89 +134,83 @@ const AdminNotifications = () => {
     fetchNotifications();
   }, []);
 
-  // Persist seen state whenever notifications change
+  // ---------- Persist seen ----------
   useEffect(() => {
-    const seenState = {};
-    notifications.forEach((n) => {
-      seenState[n._id] = n.seen;
-    });
-    localStorage.setItem("notifSeen", JSON.stringify(seenState));
+    const s = {};
+    notifications.forEach((n) => (s[n._id] = n.seen));
+    localStorage.setItem("notifSeen", JSON.stringify(s));
   }, [notifications]);
 
-  // Persist detailsOpen state whenever it changes
+  // ---------- Persist details ----------
   useEffect(() => {
     localStorage.setItem("notifDetails", JSON.stringify(detailsOpen));
   }, [detailsOpen]);
 
-  // Mark notification as seen
   const markAsSeen = async (id) => {
-    try {
-      await axiosInstance.put(`/notifications/${id}/seen`);
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === id ? { ...n, seen: true } : n))
-      );
-    } catch (err) {
-      console.error("Failed to mark notification as seen:", err);
-    }
+    await axiosInstance.put(`/notifications/${id}/seen`);
+    setNotifications((p) =>
+      p.map((n) => (n._id === id ? { ...n, seen: true } : n))
+    );
   };
 
-  // Delete notification
   const deleteNotification = async (id) => {
-    try {
-      await axiosInstance.delete(`/notifications/${id}`);
-      setNotifications((prev) => prev.filter((n) => n._id !== id));
-    } catch (err) {
-      console.error("Failed to delete notification:", err);
-    }
+    await axiosInstance.delete(`/notifications/${id}`);
+    setNotifications((p) => p.filter((n) => n._id !== id));
   };
 
-  // Handle leave request decision
   const handleLeaveDecision = async (notif, status) => {
-    if (!notif.leaveRequestId) {
-      console.error("LeaveRequest ID missing");
-      return;
-    }
-    try {
-      await axiosInstance.put(`/leaves/requests/${notif.leaveRequestId}/status`, { status });
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === notif._id ? { ...n, status } : n))
-      );
-    } catch (err) {
-      console.error(`Failed to ${status} leave:`, err);
-    }
+    await axiosInstance.put(
+      `/leaves/requests/${notif.leaveRequestId._id}/status`,
+      { status }
+    );
+    setNotifications((p) =>
+      p.map((n) => (n._id === notif._id ? { ...n, status } : n))
+    );
   };
 
-  // Handle requisition request decision
   const handleRequisitionDecision = async (notif, status) => {
-    if (!notif.reference) {
-      console.error("Requisition ID missing");
-      return;
-    }
-    try {
-      await axiosInstance.put(`/requisitions/${notif.reference}/status`, { status });
-      setNotifications((prev) =>
-        prev.map((n) => (n._id === notif._id ? { ...n, status } : n))
-      );
-    } catch (err) {
-      console.error(`Failed to ${status} requisition:`, err);
-    }
+    await axiosInstance.put(
+      `/requisitions/${notif.reference}/status`,
+      { status }
+    );
+    setNotifications((p) =>
+      p.map((n) => (n._id === notif._id ? { ...n, status } : n))
+    );
   };
 
   const handleDecision = (notif, status) => {
-    if (notif.type === "Leave") {
-      handleLeaveDecision(notif, status);
-    } else if (notif.type === "Requisition") {
-      handleRequisitionDecision(notif, status);
+    if (notif.type === "Leave") handleLeaveDecision(notif, status);
+    if (notif.type === "Requisition") handleRequisitionDecision(notif, status);
+  };
+
+  // ---------- Load requisition when opened ----------
+  const toggleDetails = async (notif) => {
+    setDetailsOpen((p) => ({ ...p, [notif._id]: !p[notif._id] }));
+
+    if (
+      notif.type === "Requisition" &&
+      notif.reference &&
+      !requisitionDetails[notif._id]
+    ) {
+      const res = await axiosInstance.get(`/requisitions/${notif.reference}`);
+      setRequisitionDetails((p) => ({
+        ...p,
+        [notif._id]: res.data,
+      }));
     }
   };
 
-  if (loading) return <p className="p-6 text-center text-indigo-700 font-semibold">Loading notifications...</p>;
-  if (!notifications.length) return <p className="p-6 text-center text-gray-500 font-semibold">No notifications yet</p>;
+  if (loading)
+    return (
+      <p className="p-6 text-center text-indigo-700 dark:text-indigo-300">
+        {t.loading}
+      </p>
+    );
 
   return (
-    <div className="p-6 max-w-6xl mx-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 min-h-screen rounded-3xl shadow-xl">
-      <h2 className="text-3xl font-bold mb-6 text-indigo-700 flex items-center gap-2">
-        <FaBell /> Admin Notifications
+    <div className="p-6 max-w-6xl mx-auto bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-800 dark:via-gray-900 dark:to-black min-h-screen rounded-3xl shadow-xl">
+      <h2 className="text-3xl font-bold mb-6 text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+        <FaBell /> {t.adminNotifications}
       </h2>
 
       <ul className="space-y-4">
@@ -124,90 +218,188 @@ const AdminNotifications = () => {
           <motion.li
             key={notif._id}
             whileHover={{ scale: 1.02 }}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className={`p-5 rounded-2xl shadow-lg flex flex-col border-l-4 ${notif.seen ? "bg-gray-100 border-gray-400" : "bg-indigo-100 border-indigo-500"}`}
+            className={`p-5 rounded-2xl shadow border-l-4 ${
+              notif.seen
+                ? "bg-gray-100 dark:bg-gray-800 border-gray-400 dark:border-gray-600"
+                : "bg-indigo-100 dark:bg-indigo-900 border-indigo-500"
+            }`}
           >
-            {/* Summary */}
+            {/* ---------- SUMMARY ---------- */}
             <div className="flex justify-between items-center">
-              <p className="font-semibold text-gray-800 text-lg">{notif.message}</p>
+              <p className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                {notif.message}
+              </p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setDetailsOpen((prev) => {
-                    const newState = { ...prev, [notif._id]: !prev[notif._id] };
-                    localStorage.setItem("notifDetails", JSON.stringify(newState));
-                    return newState;
-                  })}
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-xl flex items-center gap-1"
-                >
-                  <FaInfoCircle /> View
+                <button onClick={() => toggleDetails(notif)} className="btn blue">
+                  <FaInfoCircle /> {t.view}
                 </button>
                 {!notif.seen && (
-                  <button
-                    onClick={() => markAsSeen(notif._id)}
-                    className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-xl flex items-center gap-1"
-                  >
-                    <FaCheck /> Mark Seen
+                  <button onClick={() => markAsSeen(notif._id)} className="btn green">
+                    <FaCheck /> {t.seen}
                   </button>
                 )}
-                <button
-                  onClick={() => deleteNotification(notif._id)}
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-xl flex items-center gap-1"
-                >
-                  <FaTrash /> Delete
+                <button onClick={() => deleteNotification(notif._id)} className="btn red">
+                  <FaTrash /> {t.delete}
                 </button>
               </div>
             </div>
 
-            {/* Details */}
+            {/* ---------- DETAILS ---------- */}
             {detailsOpen[notif._id] && (
-              <div className="mt-4 p-4 bg-white rounded-xl shadow-inner space-y-2 border border-gray-200">
-                <p><span className="font-medium">Type:</span> {notif.type}</p>
-                {notif.type === "Leave" && notif.leaveRequestId && (
-                  <p><span className="font-medium">LeaveRequest ID:</span> {notif.leaveRequestId}</p>
-                )}
-                {notif.type === "Requisition" && notif.reference && (
-                  <p><span className="font-medium">Requisition ID:</span> {notif.reference}</p>
-                )}
-                {notif.employee && (
-                  <>
-                    <p><span className="font-medium">Employee:</span> {notif.employee.name}</p>
-                    <p><span className="font-medium">Email:</span> {notif.employee.email}</p>
-                  </>
-                )}
-                {notif.applicant && (
-                  <>
-                    <p><span className="font-medium">Applicant:</span> {notif.applicant.name}</p>
-                    <p><span className="font-medium">Email:</span> {notif.applicant.email}</p>
-                    <p><span className="font-medium">Phone:</span> {notif.applicant.phone}</p>
-                  </>
-                )}
-                {notif.vacancy && (
-                  <>
-                    <p><span className="font-medium">Vacancy:</span> {notif.vacancy.title}</p>
-                    <p><span className="font-medium">Department:</span> {notif.vacancy.department}</p>
-                  </>
-                )}
-                {notif.department && <p><span className="font-medium">Department:</span> {notif.department}</p>}
-                {notif.status && <p><span className="font-medium">Status:</span> {notif.status}</p>}
+              <div className="mt-4 bg-white dark:bg-gray-900 rounded-xl p-4 space-y-3 text-gray-900 dark:text-gray-100">
+                <p>
+                  <b>{t.type}:</b> {notif.type}
+                </p>
 
-                {(notif.status === "pending" && (notif.type === "Leave" || notif.type === "Requisition")) && (
-                  <div className="mt-3 flex gap-2">
-                    <button
-                      onClick={() => handleDecision(notif, "approved")}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl flex items-center gap-1"
-                    >
-                      <FaThumbsUp /> Accept
-                    </button>
-                    <button
-                      onClick={() => handleDecision(notif, "rejected")}
-                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl flex items-center gap-1"
-                    >
-                      <FaThumbsDown /> Reject
-                    </button>
-                  </div>
+                {notif.type !== "Vacancy Application" && (
+                  <p>
+                    <b>{t.status}:</b> {notif.status}
+                  </p>
                 )}
+
+                {/* ===== JOB APPLICATION ===== */}
+                {notif.type === "Vacancy Application" && (
+                  <>
+                    <h4 className="font-semibold text-indigo-600 dark:text-indigo-400">
+                      {t.applicantInformation}
+                    </h4>
+                    <p>
+                      {t.name}: {notif.applicant?.name ?? "-"}
+                    </p>
+                    <p>
+                      {t.email}: {notif.applicant?.email ?? "-"}
+                    </p>
+                    <p>
+                      {t.phone}: {notif.applicant?.phone ?? "-"}
+                    </p>
+                    <p>
+                      {t.appliedAt}: {formatDate(notif.createdAt)}
+                    </p>
+
+                    {(notif.applicant?.resume ||
+                      notif.applicant?.cv ||
+                      notif.application?.cv ||
+                      notif.resume) && (
+                      <a
+                        href={fileUrl(
+                          notif.applicant?.resume ||
+                            notif.applicant?.cv ||
+                            notif.application?.cv ||
+                            notif.resume
+                        )}
+                        download
+                        className="flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                      >
+                        <FaDownload /> {t.downloadCV}
+                      </a>
+                    )}
+                  </>
+                )}
+
+                {/* ===== LEAVE REQUEST ===== */}
+                {notif.type === "Leave" && notif.leaveRequestId && (
+                  <>
+                    <h4 className="font-semibold text-green-600 dark:text-green-400">
+                      {t.leaveRequest}
+                    </h4>
+                    <p>
+                      {t.employee}: {notif.leaveRequestId.employeeName}
+                    </p>
+                    <p>
+                      {t.start}: {formatDate(notif.leaveRequestId.startDate)}
+                    </p>
+                    <p>
+                      {t.end}: {formatDate(notif.leaveRequestId.endDate)}
+                    </p>
+                    <p>
+                      {t.duration}:{" "}
+                      {calculateDays(
+                        notif.leaveRequestId.startDate,
+                        notif.leaveRequestId.endDate
+                      )}{" "}
+                      {t.duration}
+                    </p>
+                    <p>
+                      {t.reason}: {notif.leaveRequestId.reason}
+                    </p>
+
+                    {notif.leaveRequestId.attachments?.map((f, i) => (
+                      <a
+                        key={i}
+                        href={fileUrl(f)}
+                        download
+                        className="flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                      >
+                        <FaDownload /> {t.attachment} {i + 1}
+                      </a>
+                    ))}
+                  </>
+                )}
+
+                {/* ===== REQUISITION ===== */}
+                {notif.type === "Requisition" &&
+                  requisitionDetails[notif._id] && (
+                    <>
+                      <h4 className="font-semibold text-purple-600 dark:text-purple-400">
+                        {t.requisitionDetails}
+                      </h4>
+
+                      <p>
+                        {t.position}: {requisitionDetails[notif._id].position}
+                      </p>
+                      <p>
+                        {t.department}: {requisitionDetails[notif._id].department}
+                      </p>
+                      <p>
+                        {t.education}: {requisitionDetails[notif._id].educationalLevel}
+                      </p>
+                      <p>
+                        {t.quantity}: {requisitionDetails[notif._id].quantity}
+                      </p>
+                      <p>
+                        {t.term}: {requisitionDetails[notif._id].termOfEmployment}
+                      </p>
+                      <p>
+                        {t.sex}: {requisitionDetails[notif._id].sex}
+                      </p>
+                      <p>
+                        {t.experience}: {requisitionDetails[notif._id].experience}
+                      </p>
+                      <p>
+                        {t.date}: {formatDate(requisitionDetails[notif._id].date)}
+                      </p>
+
+                      {requisitionDetails[notif._id].attachments?.map((f, i) => (
+                        <a
+                          key={i}
+                          href={fileUrl(f)}
+                          download
+                          className="flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                        >
+                          <FaDownload /> {t.attachment} {i + 1}
+                        </a>
+                      ))}
+                    </>
+                  )}
+
+                {/* ===== ACTIONS ===== */}
+                {(notif.type === "Leave" || notif.type === "Requisition") &&
+                  notif.status === "pending" && (
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleDecision(notif, "approved")}
+                        className="btn green"
+                      >
+                        <FaThumbsUp /> {t.accept}
+                      </button>
+                      <button
+                        onClick={() => handleDecision(notif, "rejected")}
+                        className="btn red"
+                      >
+                        <FaThumbsDown /> {t.reject}
+                      </button>
+                    </div>
+                  )}
               </div>
             )}
           </motion.li>

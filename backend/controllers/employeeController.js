@@ -52,35 +52,28 @@ export const getMyProfile = asyncHandler(async (req, res) => {
 });
 
 // -------------------- Get Employees by DeptHead's Department --------------------
-export const getEmployeesByDepartment = async (req, res) => {
-  const departmentId = req.query.department; 
+export const getEmployeesByDepartment = asyncHandler(async (req, res) => {
+  const { department } = req.query;
 
-  if (!departmentId) {
-    return res.status(400).json({ message: "Department ID required" });
+  if (!department) {
+    res.status(400);
+    throw new Error("Department query is required");
   }
 
   try {
-    // Validate that department exists
-    const department = await Department.findById(departmentId);
-    if (!department) {
-      return res.status(404).json({ message: "Department not found" });
+    const dept = await Department.findOne({ name: department });
+    if (!dept) {
+      res.status(404).json({ message: "Department not found" });
+      return;
     }
 
-    // Fetch employees by department ObjectId
-    const employees = await Employee.find({ department: departmentId })
-      .populate("department", "name");
-
-    if (!employees.length) {
-      return res.status(404).json({ message: "No employees found" });
-    }
-
+    const employees = await Employee.find({ department: dept._id }).populate("department", "name");
     res.json(employees);
-
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error fetching employees by department:", err);
+    res.status(500).json({ message: "Failed to fetch employees" });
   }
-};
-
+});
 
 // -------------------- Employee Dashboard Route --------------------
 export const getEmployeeDashboard = asyncHandler(async (req, res) => {

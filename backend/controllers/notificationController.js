@@ -1,8 +1,10 @@
 // backend/controllers/notificationController.js
 import asyncHandler from "express-async-handler";
 import Notification from "../models/Notification.js";
+import LeaveRequest from "../models/LeaveRequest.js";
+import Requisition from "../models/Requisition.js";
+import Vacancy from "../models/Vacancy.js";
 
-// ---------------- Get all notifications (Admin only) ----------------
 // ---------------- Get all notifications (Admin only) ----------------
 export const getAllNotifications = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
@@ -11,8 +13,11 @@ export const getAllNotifications = asyncHandler(async (req, res) => {
     throw new Error("Not authorized");
   }
 
-  // Only fetch notifications meant for Admin
-  const notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } }).sort({ createdAt: -1 });
+  const notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } })
+    .sort({ createdAt: -1 })
+    .populate("leaveRequestId")   // populate leave requests
+    .populate("reference");       // populate requisitions if ObjectId
+
   res.json(notifications);
 });
 
@@ -29,14 +34,21 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
   let notifications;
 
   if (role === "admin") {
-    // Admin sees notifications sent to Admin only
-    notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } }).sort({ createdAt: -1 });
+    notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } })
+      .sort({ createdAt: -1 })
+      .populate("leaveRequestId")
+      .populate("reference");
   } else if (role === "departmenthead") {
-    // DepartmentHead sees notifications sent to DepartmentHead only
-    notifications = await Notification.find({ recipientRole: { $regex: /^departmenthead$/i } }).sort({ createdAt: -1 });
+    notifications = await Notification.find({ recipientRole: { $regex: /^departmenthead$/i } })
+      .sort({ createdAt: -1 })
+      .populate("leaveRequestId")
+      .populate("reference");
   } else {
-    // Employee sees notifications sent specifically to them
-    notifications = await Notification.find({ recipient: user._id }).sort({ createdAt: -1 });
+    // Employee sees notifications specifically for them
+    notifications = await Notification.find({ "employee.email": user.email })
+      .sort({ createdAt: -1 })
+      .populate("leaveRequestId")
+      .populate("reference");
   }
 
   res.json(notifications);
@@ -103,7 +115,7 @@ export const createNotification = asyncHandler(async (req, res) => {
 
   const notification = await Notification.create({
     message,
-    recipientRole, // Admin or DepartmentHead
+    recipientRole,
     type,
     reference,
     employee,
