@@ -45,20 +45,21 @@ const LoginPage = () => {
   const t = texts[language];
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
+  e.preventDefault();
+  setError("");
 
-    try {
-      const userData = await loginUser(email, password, role);
-      const path =
-        userData.role.toLowerCase() === "departmenthead"
-          ? "/departmenthead/dashboard"
-          : `/${userData.role.toLowerCase()}/dashboard`;
-      navigate(path);
-    } catch (err) {
-      setError(err.message || t.failed);
-    }
-  };
+  try {
+    const userData = await loginUser(email, password, role);
+    const path =
+      userData.role.toLowerCase() === "departmenthead"
+        ? "/departmenthead/dashboard"
+        : `/${userData.role.toLowerCase()}/dashboard`;
+    navigate(path);
+  } catch (err) {
+    setError(err.message || t.failed);
+  }
+};
+
 
   return (
     <div
@@ -79,7 +80,6 @@ const LoginPage = () => {
           &#8592; {t.backHome}
         </button>
       </div>
-
       {/* Animated Background */}
       <div className="absolute inset-0 -z-10">
         <img
@@ -200,10 +200,14 @@ const LoginPage = () => {
         </motion.button>
 
         {/* Footer */}
-        <p className="text-center mt-6 text-sm transition-colors duration-300">
-          {darkMode ? "text-gray-300" : "text-gray-600"}
-          {t.university}
-        </p>
+       <p
+  className={`text-center mt-6 text-sm transition-colors duration-300 ${
+    darkMode ? "text-gray-300" : "text-gray-600"
+  }`}
+>
+  {t.university}
+</p>
+
       </motion.form>
     </div>
   );

@@ -1,24 +1,23 @@
-// controllers/deptHeadController.js
 import Employee from "../models/Employee.js";
 import bcrypt from "bcryptjs";
 import asyncHandler from "express-async-handler";
 
 // ================================
-// Get DeptHead profile
+// GET Department Head Profile
 // ================================
 export const getDeptHeadProfile = asyncHandler(async (req, res) => {
   const deptHead = await Employee.findById(req.user._id)
     .select("-password")
-    .populate("department", "name");
+    .populate("department", "_id name");
 
   if (!deptHead) {
     return res.status(404).json({ message: "Department Head not found" });
   }
 
-  // Role check
-  const role = deptHead.role?.toLowerCase() || "";
-  if (role !== "departmenthead") {
-    return res.status(403).json({ message: "Not authorized as Department Head" });
+  if (deptHead.role?.toLowerCase() !== "departmenthead") {
+    return res
+      .status(403)
+      .json({ message: "Not authorized as Department Head" });
   }
 
   return res.status(200).json({
@@ -29,8 +28,11 @@ export const getDeptHeadProfile = asyncHandler(async (req, res) => {
     lastName: deptHead.lastName || "",
     email: deptHead.email,
     phone: deptHead.phone || deptHead.phoneNumber || "",
-    department: deptHead.department?.name || deptHead.department || "",
-    address: deptHead.address,
+    department: {
+      _id: deptHead.department?._id,
+      name: deptHead.department?.name,
+    },
+    address: deptHead.address || "",
     role: deptHead.role,
     photo: deptHead.photo || "",
     empId: deptHead.empId || "",
@@ -44,77 +46,77 @@ export const getDeptHeadProfile = asyncHandler(async (req, res) => {
 });
 
 // ================================
-// Update DeptHead profile
+// UPDATE Department Head Profile
 // ================================
 export const updateDeptHeadProfile = asyncHandler(async (req, res) => {
-  try {
-    const { username, email, phone, address, password } = req.body;
+  const { username, email, phone, address, password } = req.body;
 
-    const deptHead = await Employee.findById(req.user._id).populate("department", "name");
-    if (!deptHead) {
-      return res.status(404).json({ message: "Department Head not found" });
-    }
+  const deptHead = await Employee.findById(req.user._id).populate(
+    "department",
+    "_id name"
+  );
 
-    // Role check
-    const role = deptHead.role?.toLowerCase() || "";
-   if (req.user.role !== "departmenthead") {
-  return res.status(403).json({ message: "Not authorized as Department Head" });
-}
-
-    // Update fields
-    deptHead.username = username || deptHead.username;
-    deptHead.email = email || deptHead.email;
-    deptHead.phone = phone || deptHead.phone;
-    deptHead.address = address || deptHead.address;
-
-    // Update password if provided
-    if (password) {
-      const salt = await bcrypt.genSalt(10);
-      deptHead.password = await bcrypt.hash(password, salt);
-    }
-
-    // Update photo if uploaded
-    if (req.file) {
-      deptHead.photo = req.file.path; // ensure multer is configured
-    }
-
-    const updated = await deptHead.save();
-
-    res.json({
-      _id: updated._id,
-      username: updated.username,
-      firstName: updated.firstName || "",
-      middleName: updated.middleName || "",
-      lastName: updated.lastName || "",
-      email: updated.email,
-      phone: updated.phone || "",
-      department: updated.department?.name || updated.department || "",
-      address: updated.address,
-      role: updated.role,
-      photo: updated.photo || "",
-      empId: updated.empId || "",
-      typeOfPosition: updated.typeOfPosition || "Department Head",
-      salary: updated.salary || "",
-      experience: updated.experience || "",
-      contactPerson: updated.contactPerson || "",
-      contactPersonAddress: updated.contactPersonAddress || "",
-      employeeStatus: updated.employeeStatus || updated.status || "Active",
-    });
-  } catch (err) {
-    console.error("updateDeptHeadProfile error:", err);
-    res.status(500).json({ message: "Server Error", error: err.message });
+  if (!deptHead) {
+    return res.status(404).json({ message: "Department Head not found" });
   }
+
+  if (deptHead.role?.toLowerCase() !== "departmenthead") {
+    return res
+      .status(403)
+      .json({ message: "Not authorized as Department Head" });
+  }
+
+  deptHead.username = username || deptHead.username;
+  deptHead.email = email || deptHead.email;
+  deptHead.phone = phone || deptHead.phone;
+  deptHead.address = address || deptHead.address;
+
+  if (password) {
+    const salt = await bcrypt.genSalt(10);
+    deptHead.password = await bcrypt.hash(password, salt);
+  }
+
+  if (req.file) {
+    deptHead.photo = req.file.path;
+  }
+
+  const updated = await deptHead.save();
+
+  res.status(200).json({
+    _id: updated._id,
+    username: updated.username,
+    firstName: updated.firstName || "",
+    middleName: updated.middleName || "",
+    lastName: updated.lastName || "",
+    email: updated.email,
+    phone: updated.phone || "",
+    department: {
+      _id: updated.department?._id,
+      name: updated.department?.name,
+    },
+    address: updated.address || "",
+    role: updated.role,
+    photo: updated.photo || "",
+    empId: updated.empId || "",
+    typeOfPosition: updated.typeOfPosition || "Department Head",
+    salary: updated.salary || "",
+    experience: updated.experience || "",
+    contactPerson: updated.contactPerson || "",
+    contactPersonAddress: updated.contactPersonAddress || "",
+    employeeStatus:
+      updated.employeeStatus || updated.status || "Active",
+  });
 });
 
 // ================================
-// Update DeptHead password
+// UPDATE Department Head Password
 // ================================
 export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
     res.status(400);
-    throw new Error("Please provide both current and new password");
+    throw new Error("Both current and new password are required");
   }
 
   const deptHead = await Employee.findById(req.user._id);
@@ -123,7 +125,11 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
     throw new Error("Department Head not found");
   }
 
-  const isMatch = await bcrypt.compare(currentPassword, deptHead.password);
+  const isMatch = await bcrypt.compare(
+    currentPassword,
+    deptHead.password
+  );
+
   if (!isMatch) {
     res.status(400);
     throw new Error("Current password is incorrect");
@@ -134,5 +140,7 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
 
   await deptHead.save();
 
-  res.json({ message: "Password updated successfully" });
+  res.status(200).json({
+    message: "Password updated successfully",
+  });
 });

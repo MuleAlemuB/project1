@@ -119,18 +119,18 @@ const DeptHeadEmployees = () => {
     const fetchEmployees = async () => {
       try {
         const res = await axiosInstance.get(
-          `/employees/department?department=${encodeURIComponent(
-            user.department
-          )}`
+          `/employees/department?department=${encodeURIComponent(user.department)}`
         );
 
         const employeesWithDetails = res.data.map((emp) => ({
-  ...emp,
-  departmentName: emp.department?.name || "N/A",
-  phone: emp.phone || emp.phoneNumber || "N/A",
-  photo: emp.photo ? `${BACKEND_URL}/${emp.photo}` : null, // full URL
-}));
+          ...emp,
+          departmentName: emp.department?.name || "N/A",
+          phone: emp.phone || emp.phoneNumber || "N/A",
+          photo: emp.photo
+  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
+  : '/fallback-avatar.png'
 
+        }));
         setEmployees(employeesWithDetails);
       } catch (err) {
         console.error(err.response?.data || err);
@@ -145,9 +145,7 @@ const DeptHeadEmployees = () => {
 
   // Search filter
   const filteredEmployees = employees.filter((emp) =>
-    `${emp.firstName} ${emp.lastName}`
-      .toLowerCase()
-      .includes(search.toLowerCase())
+    `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleChange = (e) =>
@@ -159,17 +157,18 @@ const DeptHeadEmployees = () => {
 
       // Refresh list
       const res = await axiosInstance.get(
-        `/employees/department?department=${encodeURIComponent(
-          user.department
-        )}`
+        `/employees/department?department=${encodeURIComponent(user.department)}`
       );
 
       setEmployees(
         res.data.map((emp) => ({
           ...emp,
-           departmentName: emp.department?.name || "N/A",
-  phone: emp.phone || emp.phoneNumber || "N/A",
-  photo: emp.photo ? `/${emp.photo}` : null,
+          departmentName: emp.department?.name || "N/A",
+          phone: emp.phone || emp.phoneNumber || "N/A",
+          photo: emp.photo
+  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
+  : '/fallback-avatar.png'
+
         }))
       );
 
@@ -213,7 +212,10 @@ const DeptHeadEmployees = () => {
       gender: emp.gender || "",
       qualification: emp.qualification || "",
       termOfEmployment: emp.termOfEmployment || "",
-      photo: emp.photo || "",
+      photo: emp.photo
+  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
+  : '/fallback-avatar.png'
+
     });
   };
 
@@ -264,11 +266,10 @@ const DeptHeadEmployees = () => {
               className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl"
             >
               <img
-  src={emp.photo || "/fallback-avatar.png"}
+  src={emp.photo || '/fallback-avatar.png'}
   alt="Employee"
   className="w-12 h-12 rounded-full object-cover"
 />
-
 
               <h2 className="text-xl font-semibold mb-1">
                 {emp.firstName} {emp.lastName}
@@ -320,17 +321,16 @@ const DeptHeadEmployees = () => {
 
             <div className="flex flex-col items-center">
               <img
-  src={selectedEmployee.photo || "/fallback-avatar.png"}
-  className="w-16 h-16 rounded-full object-cover"
-/>
+  src={selectedEmployee.photo || "/fallback-avatar.png"} 
 
+  alt="Employee"
+  className="w-12 h-12 rounded-full object-cover"
+/>
 
               <h2 className="text-3xl font-bold text-indigo-600 mb-1">
                 {selectedEmployee.firstName} {selectedEmployee.lastName}
               </h2>
-              <p className="mb-4">
-                {selectedEmployee.typeOfPosition || "N/A"}
-              </p>
+              <p className="mb-4">{selectedEmployee.typeOfPosition || "N/A"}</p>
             </div>
 
             {/* Details */}

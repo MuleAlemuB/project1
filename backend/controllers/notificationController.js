@@ -22,33 +22,33 @@ export const getAllNotifications = asyncHandler(async (req, res) => {
 });
 
 // ---------------- Get notifications for logged-in user ----------------
+// backend/controllers/notificationController.js
 export const getMyNotifications = asyncHandler(async (req, res) => {
   const user = req.user;
   const role = user.role.toLowerCase();
 
-  if (!["admin", "departmenthead", "employee"].includes(role)) {
-    res.status(403);
-    throw new Error("User role not authorized to view notifications");
-  }
-
   let notifications;
 
   if (role === "admin") {
-    notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } })
+    notifications = await Notification.find({ recipientRole: "Admin" })
       .sort({ createdAt: -1 })
-      .populate("leaveRequestId")
-      .populate("reference");
+      .populate("leaveRequestId");
   } else if (role === "departmenthead") {
-    notifications = await Notification.find({ recipientRole: { $regex: /^departmenthead$/i } })
+    notifications = await Notification.find({ recipientRole: "DepartmentHead" })
       .sort({ createdAt: -1 })
-      .populate("leaveRequestId")
-      .populate("reference");
+      .populate("leaveRequestId");
+  } else if (role === "employee") {
+    notifications = await Notification.find({
+      $or: [
+        { "employee.email": user.email },
+        { recipientRole: "Employee" }
+      ]
+    })
+      .sort({ createdAt: -1 })
+      .populate("leaveRequestId");
   } else {
-    // Employee sees notifications specifically for them
-    notifications = await Notification.find({ "employee.email": user.email })
-      .sort({ createdAt: -1 })
-      .populate("leaveRequestId")
-      .populate("reference");
+    res.status(403);
+    throw new Error("User role not authorized");
   }
 
   res.json(notifications);
@@ -83,6 +83,7 @@ export const markAsSeen = asyncHandler(async (req, res) => {
 export const deleteNotification = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id.toString();
 
   const notif = await Notification.findById(req.params.id);
   if (!notif) {
@@ -90,10 +91,20 @@ export const deleteNotification = asyncHandler(async (req, res) => {
     throw new Error("Notification not found");
   }
 
-  const canDelete =
-    (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") ||
-    (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") ||
-    (role === "employee" && notif.employee?.email?.toLowerCase() === email);
+  let canDelete = false;
+
+  if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
+    canDelete = true;
+  } else if (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") {
+    canDelete = true;
+  } else if (role === "employee") {
+    if (notif.recipientRole?.toLowerCase() === "employee") {
+      // Allow delete if either email matches OR employee object is missing/empty
+      if (!notif.employee || Object.keys(notif.employee).length === 0 || notif.employee.email?.toLowerCase() === email) {
+        canDelete = true;
+      }
+    }
+  }
 
   if (!canDelete) {
     res.status(403);
@@ -103,6 +114,7 @@ export const deleteNotification = asyncHandler(async (req, res) => {
   await notif.deleteOne();
   res.json({ message: "Notification deleted successfully" });
 });
+
 
 // ---------------- Create a new notification ----------------
 export const createNotification = asyncHandler(async (req, res) => {

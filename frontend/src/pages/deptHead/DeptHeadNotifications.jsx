@@ -29,7 +29,7 @@ const DeptHeadNotifications = () => {
     if (!authLoading && user) fetchNotifications();
   }, [user, authLoading]);
 
-  // Polling every 5 seconds for new notifications (including employee leave requests)
+  // Polling every 5 seconds for new notifications
   useEffect(() => {
     if (!authLoading && user) {
       const interval = setInterval(fetchNotifications, 5000);
@@ -59,7 +59,11 @@ const DeptHeadNotifications = () => {
 
   if (authLoading || loading)
     return (
-      <div className={`p-6 text-center ${darkMode ? "text-gray-200" : "text-gray-700"}`}>
+      <div
+        className={`p-6 text-center ${
+          darkMode ? "text-gray-200" : "text-gray-700"
+        }`}
+      >
         {language === "am" ? "በመጫን ላይ..." : "Loading..."}
       </div>
     );
@@ -81,7 +85,9 @@ const DeptHeadNotifications = () => {
       </h1>
 
       {notifications.length === 0 ? (
-        <p className={`${textClass}`}>{language === "am" ? "ምንም ማሳወቂያ የለም" : "No notifications"}</p>
+        <p className={`${textClass}`}>
+          {language === "am" ? "ምንም ማሳወቂያ የለም" : "No notifications"}
+        </p>
       ) : (
         <div className="space-y-4">
           {notifications.map((n) => (
@@ -95,9 +101,13 @@ const DeptHeadNotifications = () => {
                 <div className="flex gap-3 items-center">
                   <FaInfoCircle className="text-blue-500 mt-1" />
                   <div>
-                    <p className={`font-semibold ${textClass}`}>{n.title || n.type}</p>
+                    <p className={`font-semibold ${textClass}`}>
+                      {n.title || n.type}
+                    </p>
                     <p className={`${textClass}`}>{n.message}</p>
-                    <p className="text-sm text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </p>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2">
@@ -116,7 +126,9 @@ const DeptHeadNotifications = () => {
                     <FaTrash /> {language === "am" ? "አጥፋ" : "Delete"}
                   </button>
                   <button
-                    onClick={() => setDetailsOpen((prev) => ({ ...prev, [n._id]: !prev[n._id] }))}
+                    onClick={() =>
+                      setDetailsOpen((prev) => ({ ...prev, [n._id]: !prev[n._id] }))
+                    }
                     className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded flex items-center gap-1 mt-1"
                   >
                     <FaInfoCircle /> {language === "am" ? "ዝርዝር ተመልከት" : "View Details"}
@@ -129,7 +141,18 @@ const DeptHeadNotifications = () => {
                 <div className="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded-xl border border-gray-300 dark:border-gray-600 space-y-1">
                   {n.type && <p><span className="font-medium">Type:</span> {n.type}</p>}
                   {n.reference && <p><span className="font-medium">Requisition ID:</span> {n.reference}</p>}
-                  {n.leaveRequestId && <p><span className="font-medium">LeaveRequest ID:</span> {n.leaveRequestId}</p>}
+                  {n.leaveRequestId && (
+                    <>
+                      <p><span className="font-medium">LeaveRequest ID:</span> {n.leaveRequestId._id || n.leaveRequestId}</p>
+                      <p><span className="font-medium">Employee:</span> {n.leaveRequestId?.requesterName || "N/A"}</p>
+                      <p><span className="font-medium">Email:</span> {n.leaveRequestId?.requesterEmail || "N/A"}</p>
+                      <p><span className="font-medium">Department:</span> {typeof n.leaveRequestId?.department === "object" ? n.leaveRequestId.department.name : n.leaveRequestId?.department}</p>
+                      <p><span className="font-medium">From:</span> {new Date(n.leaveRequestId?.startDate).toLocaleDateString()}</p>
+                      <p><span className="font-medium">To:</span> {new Date(n.leaveRequestId?.endDate).toLocaleDateString()}</p>
+                      <p><span className="font-medium">Reason:</span> {n.leaveRequestId?.reason}</p>
+                      <p><span className="font-medium">Status:</span> {n.leaveRequestId?.status}</p>
+                    </>
+                  )}
                   {n.employee && (
                     <>
                       <p><span className="font-medium">Employee:</span> {n.employee.name}</p>
@@ -149,7 +172,7 @@ const DeptHeadNotifications = () => {
                       <p><span className="font-medium">Department:</span> {n.vacancy.department}</p>
                     </>
                   )}
-                  {n.department && <p><span className="font-medium">Department:</span> {n.department}</p>}
+                  {n.department && typeof n.department !== "object" && <p><span className="font-medium">Department:</span> {n.department}</p>}
                   {n.status && <p><span className="font-medium">Status:</span> {n.status}</p>}
                 </div>
               )}

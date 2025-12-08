@@ -60,40 +60,28 @@ const DeptHeadDashboard = () => {
         console.log("DeptHead Profile:", profile);
         setDeptHead(profile);
 
-        // Determine department ID or name
-        const deptId = profile.department?._id || profile.department;
-        console.log("Department ID/Name:", deptId);
+        // Use department name (backend expects name)
+        const deptName = profile.department?.name || profile.department;
+        console.log("Dept Name:", deptName);
 
         // 2️⃣ Fetch employees
         const empRes = await axiosInstance.get(
-          `/employees/department?department=${deptId}`
+          `/employees/department?department=${encodeURIComponent(deptName)}`
         );
-        console.log("Employees Response:", empRes.data);
+        const employees = Array.isArray(empRes.data) ? empRes.data : [];
+        console.log("Employees:", employees);
 
-        const employees =
-          Array.isArray(empRes.data) ? empRes.data : empRes.data.employees || [];
-
-        // 3️⃣ Fetch pending leaves
-        const leaveRes = await axiosInstance.get(
-          `/leave/requests?department=${deptId}&status=pending`
-        );
-        console.log("Pending Leaves Response:", leaveRes.data);
-
-        const pendingLeaves =
-          Array.isArray(leaveRes.data)
-            ? leaveRes.data
-            : leaveRes.data.requests || [];
+        // 3️⃣ Fetch pending leaves for this department
+        const leaveRes = await axiosInstance.get("/leave/requests");
+        const pendingLeaves = Array.isArray(leaveRes.data) ? leaveRes.data : [];
+        console.log("Pending Leaves:", pendingLeaves);
 
         // 4️⃣ Fetch notifications
         const notiRes = await axiosInstance.get("/notifications/my");
-        console.log("Notifications Response:", notiRes.data);
+        const notifications = Array.isArray(notiRes.data) ? notiRes.data : [];
+        console.log("Notifications:", notifications);
 
-        const notifications =
-          Array.isArray(notiRes.data)
-            ? notiRes.data
-            : notiRes.data.notifications || [];
-
-        // 5️⃣ Set stats
+        // 5️⃣ Set dashboard stats
         setStats({
           totalEmployees: employees.length,
           pendingLeaves: pendingLeaves.length,
@@ -134,8 +122,7 @@ const DeptHeadDashboard = () => {
     >
       {/* NAVBAR */}
       <header
-        className={`flex justify-between items-center p-6 shadow-2xl backdrop-blur-xl 
-        ${
+        className={`flex justify-between items-center p-6 shadow-2xl backdrop-blur-xl ${
           darkMode
             ? "bg-gray-800/70 border-b border-gray-700"
             : "bg-white/70 border-b border-blue-200"
@@ -167,12 +154,11 @@ const DeptHeadDashboard = () => {
           {/* LANGUAGE */}
           <button
             onClick={() => setLanguage(language === "en" ? "am" : "en")}
-            className={`flex items-center gap-2 px-3 py-1 rounded-lg border shadow-md
-              transition-all duration-300 hover:scale-105 ${
-                darkMode
-                  ? "bg-gray-700 border-gray-600 text-gray-200"
-                  : "bg-white border-blue-300 text-gray-800"
-              }`}
+            className={`flex items-center gap-2 px-3 py-1 rounded-lg border shadow-md transition-all duration-300 hover:scale-105 ${
+              darkMode
+                ? "bg-gray-700 border-gray-600 text-gray-200"
+                : "bg-white border-blue-300 text-gray-800"
+            }`}
           >
             <FaGlobe /> {language.toUpperCase()}
           </button>
@@ -180,12 +166,11 @@ const DeptHeadDashboard = () => {
           {/* THEME */}
           <button
             onClick={() => setDarkMode(!darkMode)}
-            className={`px-4 py-2 rounded-xl font-medium transition-all duration-300
-              flex items-center gap-2 shadow-lg hover:scale-105 ${
-                darkMode
-                  ? "bg-blue-500 hover:bg-blue-600 text-white"
-                  : "bg-white border border-blue-400 text-blue-600 hover:bg-blue-100"
-              }`}
+            className={`px-4 py-2 rounded-xl font-medium transition-all duration-300 flex items-center gap-2 shadow-lg hover:scale-105 ${
+              darkMode
+                ? "bg-blue-500 hover:bg-blue-600 text-white"
+                : "bg-white border border-blue-400 text-blue-600 hover:bg-blue-100"
+            }`}
           >
             {darkMode ? <FaSun /> : <FaMoon />} {darkMode ? "Light" : "Dark"}
           </button>

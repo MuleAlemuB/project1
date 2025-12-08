@@ -37,9 +37,8 @@ import NotificationsPage from "./pages/deptHead/DeptHeadNotifications";
 
 // Employee Pages
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
-import EmployeeAttendance from "./components/employee/Attendance";
 import EmployeeLeave from "./pages/employee/EmployeeLeave";
-import Notifications from "./components/employee/Notifications";
+import EmployeeNotifications from "./pages/employee/EmployeeNotifications";
 import EmployeeProfile from "./pages/employee/EmployeeProfile";
 
 function App() {
@@ -79,15 +78,14 @@ function App() {
           <Route path="notifications" element={<NotificationsPage />} />
         </Route>
 
-        {/* Employee Routes */}
-        <Route path="/employee/*" element={<EmployeeLayout />}>
-          <Route index element={<EmployeeDashboard />} />
-          <Route path="dashboard" element={<EmployeeDashboard />} />
-          <Route path="attendance" element={<EmployeeAttendance />} />
-          <Route path="leave" element={<EmployeeLeave />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="profile" element={<EmployeeProfile />} />
-        </Route>
+        {/* Employee Routes without sidebar */}
+<Route path="/employee">
+  <Route index element={<EmployeeDashboard />} />
+  <Route path="dashboard" element={<EmployeeDashboard />} />
+  <Route path="leave" element={<EmployeeLeave />} />
+  <Route path="profile" element={<EmployeeProfile />} />
+  <Route path="/employee/notifications" element={<EmployeeNotifications />} /> {/* New route */}
+</Route>
 
         {/* Redirect unknown paths */}
         <Route path="*" element={<Navigate to="/" replace />} />

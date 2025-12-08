@@ -355,7 +355,4 @@ const SectionCard = ({ title, items, darkMode, isApplication = false, language, 
   );
 };
 
-
-
-
 export default AdminDashboard;
