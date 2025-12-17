@@ -1,5 +1,5 @@
 // =========================================================
-//  ADMIN DASHBOARD  (Persistent User + Token + Stats Fix)
+//  ADMIN DASHBOARD  (Persistent User + Token + Stats + Charts + Real Data Only)
 // =========================================================
 
 import React, { useEffect, useState } from "react";
@@ -19,6 +19,20 @@ import logo from "../../assets/logo.jpg";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "../../contexts/SettingsContext";
+
+// Recharts
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
 
 // Translations
 const translations = {
@@ -88,7 +102,7 @@ const AdminDashboard = () => {
     localStorage.setItem("language", language);
   }, [darkMode, language]);
 
-  // Fetch dashboard stats
+  // Fetch dashboard stats (real data only)
   useEffect(() => {
     const fetchStats = async () => {
       if (!token) return;
@@ -98,12 +112,14 @@ const AdminDashboard = () => {
         });
 
         setStats({
-          totalEmployees: res.data.totalEmployees,
-          totalDepartments: res.data.totalDepartments,
-          totalLeaves: res.data.totalLeaves,
+          totalEmployees: res.data.totalEmployees || 0,
+          totalDepartments: res.data.totalDepartments || 0,
+          totalLeaves: res.data.totalLeaves || 0,
           activeVacanciesCount: res.data.activeVacancies || 0,
           recentApplications: res.data.recentApplications || [],
           recentVacancies: res.data.recentVacancies || [],
+          employeePerDepartment: res.data.employeePerDepartment || [],
+          leavesPerMonth: res.data.leavesPerMonth || [],
         });
       } catch (err) {
         console.error(err);
@@ -130,7 +146,7 @@ const AdminDashboard = () => {
         const res = await axiosInstance.get("/admin/notifications", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        setNotifications(res.data.filter((n) => !n.seen));
+        setNotifications(Array.isArray(res.data) ? res.data.filter((n) => !n.seen) : []);
       } catch (err) {
         console.error(err);
         setMessage(t.notificationError);
@@ -258,6 +274,45 @@ const AdminDashboard = () => {
           />
         </div>
 
+        {/* ANALYTICS CHARTS */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Employees per Department */}
+          <Card title="Employees per Department" darkMode={darkMode}>
+            {stats?.employeePerDepartment?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={stats.employeePerDepartment}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="department" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="count" fill="#3b82f6" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center italic">{t.noItems}</p>
+            )}
+          </Card>
+
+          {/* Leaves per Month */}
+          <Card title="Leaves per Month" darkMode={darkMode}>
+            {stats?.leavesPerMonth?.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={stats.leavesPerMonth}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="count" stroke="#10b981" strokeWidth={3} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="text-center italic">{t.noItems}</p>
+            )}
+          </Card>
+        </div>
+
         {/* RECENT APPLICATIONS */}
         <SectionCard
           title={t.recentApplications}
@@ -278,9 +333,7 @@ const AdminDashboard = () => {
       </main>
 
       {/* FOOTER */}
-      <footer
-        className={`${darkMode ? "bg-gray-800 text-white" : "bg-blue-800 text-white"} p-4 text-center`}
-      >
+      <footer className={`${darkMode ? "bg-gray-800 text-white" : "bg-blue-800 text-white"} p-4 text-center`}>
         © {new Date().getFullYear()} Debre Tabor University - HRMS
       </footer>
     </div>
@@ -302,10 +355,20 @@ const StatCard = ({ icon, title, value, darkMode, borderColor }) => (
   </div>
 );
 
-// SECTION CARD
+// GENERIC CARD FOR CHARTS
+const Card = ({ title, children, darkMode }) => (
+  <div
+    className={`${
+      darkMode ? "bg-gray-700/70 text-white" : "bg-white/70 text-gray-900"
+    } rounded-2xl shadow-md p-4 flex flex-col gap-3`}
+  >
+    <h3 className="text-lg font-bold border-b border-blue-500 pb-1">{title}</h3>
+    {children}
+  </div>
+);
 
-const SectionCard = ({ title, items, darkMode, isApplication = false, language, translations }) => {
-  // Helper function to safely format dates
+// SECTION CARD
+const SectionCard = ({ title, items, darkMode, isApplication = false, language }) => {
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return isNaN(date.getTime()) ? "N/A" : date.toDateString();
@@ -313,11 +376,7 @@ const SectionCard = ({ title, items, darkMode, isApplication = false, language, 
 
   return (
     <section>
-      <h2
-        className={`${
-          darkMode ? "text-blue-300" : "text-blue-700"
-        } text-2xl font-bold mb-4 border-b-2 border-blue-500 pb-2`}
-      >
+      <h2 className={`${darkMode ? "text-blue-300" : "text-blue-700"} text-2xl font-bold mb-4 border-b-2 border-blue-500 pb-2`}>
         {title}
       </h2>
 
@@ -330,25 +389,17 @@ const SectionCard = ({ title, items, darkMode, isApplication = false, language, 
                 darkMode ? "bg-gray-700/70 text-white" : "bg-white/70 text-gray-900"
               } backdrop-blur-md rounded-2xl shadow-md p-4 flex flex-col gap-2 hover:shadow-lg hover:scale-105 transition-transform duration-300 border border-gray-200`}
             >
-              <p className="font-bold text-blue-700">
-                {isApplication ? item.name : item.position || "N/A"}
-              </p>
+              <p className="font-bold text-blue-700">{isApplication ? item.name : item.position || "N/A"}</p>
 
               {isApplication ? (
-                <p className="text-blue-400 font-semibold">
-                  {item.vacancy?.position || "N/A"}
-                </p>
+                <p className="text-blue-400 font-semibold">{item.vacancy?.position || "N/A"}</p>
               ) : (
-                <p className="text-blue-400 font-semibold">
-                  {formatDate(item.postDate || item.createdAt)}
-                </p>
+                <p className="text-blue-400 font-semibold">{formatDate(item.postDate || item.createdAt)}</p>
               )}
             </div>
           ))
         ) : (
-          <p className={`${darkMode ? "text-gray-300" : "text-gray-500"} italic text-sm`}>
-            {translations?.[language]?.noItems || "No items available"}
-          </p>
+          <p className={`${darkMode ? "text-gray-300" : "text-gray-500"} italic text-sm`}>{t.noItems}</p>
         )}
       </div>
     </section>

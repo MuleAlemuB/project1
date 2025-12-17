@@ -13,7 +13,8 @@ import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import VacanciesHome from "./pages/VacanciesHome";
 import About from "./components/public/About";
-
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageEmployees from "./pages/admin/ManageEmployees";
@@ -50,6 +51,9 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/vacancies" element={<VacanciesHome />} />
         <Route path="/about" element={<About />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
 
         {/* Admin Routes */}
         <Route path="/admin/*" element={<AdminLayout />}>

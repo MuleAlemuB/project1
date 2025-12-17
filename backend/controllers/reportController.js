@@ -4,42 +4,50 @@ import Department from "../models/Department.js";
 import Vacancy from "../models/Vacancy.js";
 import Leave from "../models/LeaveRequest.js";
 import Attendance from "../models/Attendance.js";
-import Requisition from "../models/Requisition.js"; // Add your Requisition model
+import Requisition from "../models/Requisition.js";
 
 // @desc    Get admin report with all employee details
 // @route   GET /api/reports/admin
 // @access  Admin
 export const getAdminReport = asyncHandler(async (req, res) => {
-  // Fetch all employees with department name
+  // Fetch all employees with department info
   const employees = await Employee.find().populate("department", "name");
 
-  // Total counts
+  // Total employees and departments
   const totalEmployees = employees.length;
   const totalDepartments = await Department.countDocuments();
 
-  // Only count accepted/posting items
-  const totalVacancies = await Vacancy.countDocuments({ status: "Posted" });
-  const totalRequisitions = await Requisition.countDocuments({ status: "Accepted" });
-  const totalLeaves = await Leave.countDocuments({ status: "Accepted" });
+  // Total vacancies (all active)
+  const totalVacancies = await Vacancy.countDocuments({ isActive: true });
 
-  // Aggregate absent days for all employees
+  // Total requisitions (approved only)
+  const totalRequisitions = await Requisition.countDocuments({ status: "approved" });
+
+  // Total leave requests (approved only)
+  const totalLeaveRequests = await Leave.countDocuments({ status: "approved" });
+
+  // Total absent days per employee
   const absentAgg = await Attendance.aggregate([
     { $match: { status: "Absent" } },
     { $group: { _id: "$employeeId", count: { $sum: 1 } } },
   ]);
   const absentMap = {};
-  absentAgg.forEach(a => { absentMap[a._id.toString()] = a.count });
+  absentAgg.forEach(a => { 
+    if(a._id) absentMap[a._id.toString()] = a.count; 
+  });
 
-  // Aggregate leave requests per employee (accepted only)
+  // Leave requests per employee
   const leaveAgg = await Leave.aggregate([
-    { $match: { status: "Accepted" } },
-    { $group: { _id: "$employee", count: { $sum: 1 } } },
+    { $match: { status: "approved" } },
+    { $group: { _id: "$requester", count: { $sum: 1 } } },
   ]);
   const leaveMap = {};
-  leaveAgg.forEach(l => { leaveMap[l._id.toString()] = l.count });
+  leaveAgg.forEach(l => { 
+    if(l._id) leaveMap[l._id.toString()] = l.count; 
+  });
 
-  // Map employee details
-  const employeeDetails = employees.map((e) => ({
+  // Map employee details with absent & leave counts
+  const employeeDetails = employees.map(e => ({
     _id: e._id,
     firstName: e.firstName,
     middleName: e.middleName,
@@ -65,14 +73,16 @@ export const getAdminReport = asyncHandler(async (req, res) => {
     leaveRequests: leaveMap[e._id.toString()] || 0,
   }));
 
-  // Send response
+  // Total employees who left (status = "Left")
+  const totalLeftEmployees = await Employee.countDocuments({ employeeStatus: "Left" });
+
   res.json({
     totalEmployees,
     totalDepartments,
     totalVacancies,
     totalRequisitions,
-    totalLeaveRequests: totalLeaves,
-    totalNewEmployees: 0, // implement if you track newly added employees
+    totalLeaveRequests,
+    totalLeftEmployees,
     employees: employeeDetails,
   });
 });

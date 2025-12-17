@@ -167,28 +167,57 @@ export const deleteEmployee = asyncHandler(async (req, res) => {
 
 // ---------------------- DASHBOARD STATS ----------------------
 export const getDashboardStats = asyncHandler(async (req, res) => {
+  // Basic stats
   const totalEmployees = await Employee.countDocuments();
   const totalDepartments = await Department.countDocuments();
   const totalLeaves = await Leave.countDocuments({ status: "approved" });
   const activeVacancies = await Vacancy.countDocuments({});
 
-
+  // Recent applications
   const recentApplications = await Application.find()
-  .sort({ appliedAt: -1 })
-  .limit(2)
-  .populate({
-    path: "vacancy",
-    select: "position title", // get the position or title of vacancy
-  })
-  .select("name appliedAt vacancy");
+    .sort({ appliedAt: -1 })
+    .limit(3)
+    .populate({ path: "vacancy", select: "position title" })
+    .select("name appliedAt vacancy");
 
+  // Recent vacancies
+  const recentVacancies = await Vacancy.find()
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .select("title position createdAt");
 
-  // Last 2 vacancies (all, not just active)
-const recentVacancies = await Vacancy.find()
-  .sort({ createdAt: -1 })
-  .limit(2)
-  .select("title position createdAt");
+  // Employees per Department
+  const employeePerDepartment = await Employee.aggregate([
+    {
+      $group: {
+        _id: "$department",
+        count: { $sum: 1 },
+      },
+    },
+    {
+      $lookup: {
+        from: "departments",
+        localField: "_id",
+        foreignField: "_id",
+        as: "departmentInfo",
+      },
+    },
+    { $unwind: "$departmentInfo" },
+    { $project: { department: "$departmentInfo.name", count: 1 } },
+  ]);
 
+  // Leaves per Month (last 12 months)
+  const leavesPerMonth = await Leave.aggregate([
+    { $match: { status: "approved" } },
+    {
+      $group: {
+        _id: { $month: "$createdAt" },
+        count: { $sum: 1 },
+      },
+    },
+    { $project: { month: "$_id", count: 1, _id: 0 } },
+    { $sort: { month: 1 } },
+  ]);
 
   res.json({
     totalEmployees,
@@ -197,6 +226,8 @@ const recentVacancies = await Vacancy.find()
     activeVacancies,
     recentApplications,
     recentVacancies,
+    employeePerDepartment,
+    leavesPerMonth,
   });
 });
 

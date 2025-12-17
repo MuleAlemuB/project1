@@ -97,15 +97,18 @@ export const getAttendanceHistory = asyncHandler(async (req, res) => {
   if (!deptDoc)
     return res.status(404).json({ message: "Department not found" });
 
-  const allAttendance = await Attendance.find({ department: deptDoc._id })
-    .populate("employeeId", "firstName lastName photo")
-    .sort({ date: -1 });
+  const allAttendance = await Attendance.find({ department: deptDoc._id }).sort({ date: -1 });
 
   const historyMap = {};
+
   allAttendance.forEach((record) => {
-    if (!historyMap[record.date]) historyMap[record.date] = [];
-    historyMap[record.date].push({
-      employeeId: record.employeeId._id,
+    const empId = record.employeeId.toString(); // ✅ always string
+    const date = record.date;
+
+    if (!historyMap[date]) historyMap[date] = [];
+
+    historyMap[date].push({
+      employeeId: empId,
       status: record.status,
     });
   });

@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserIcon, LockClosedIcon, AcademicCapIcon } from "@heroicons/react/24/solid";
+import {
+  UserIcon,
+  LockClosedIcon,
+  AcademicCapIcon,
+  EyeIcon,
+  EyeSlashIcon,
+} from "@heroicons/react/24/solid";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
 import { useSettings } from "../contexts/SettingsContext";
@@ -8,12 +14,14 @@ import { useSettings } from "../contexts/SettingsContext";
 const LoginPage = () => {
   const { loginUser } = useAuth();
   const { darkMode, language } = useSettings();
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("admin");
-  const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  // Load persisted values from localStorage if available
+  const [email, setEmail] = useState(localStorage.getItem("loginEmail") || "");
+  const [password, setPassword] = useState(localStorage.getItem("loginPassword") || "");
+  const [role, setRole] = useState(localStorage.getItem("loginRole") || "admin");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
 
   const texts = {
     en: {
@@ -27,6 +35,7 @@ const LoginPage = () => {
       university: "Debre Tabor University | Human Resource Management System",
       failed: "Login failed",
       backHome: "Back to Home",
+      forgotPassword: "Forgot Password?",
     },
     am: {
       login: "መግቢያ",
@@ -39,27 +48,40 @@ const LoginPage = () => {
       university: "ደብረ ታቦር ዩኒቨርሲቲ | የሰው ኃይል አስተዳደር ስርዓት",
       failed: "መግቢያ አልተሳካም",
       backHome: "ወደ መነሻ ገጽ ተመለስ",
+      forgotPassword: "የይለፍ ቃል ይረሳል?",
     },
   };
 
   const t = texts[language];
 
+  // Persist values in localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("loginEmail", email);
+  }, [email]);
+
+  useEffect(() => {
+    localStorage.setItem("loginPassword", password);
+  }, [password]);
+
+  useEffect(() => {
+    localStorage.setItem("loginRole", role);
+  }, [role]);
+
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  setError("");
+    e.preventDefault();
+    setError("");
 
-  try {
-    const userData = await loginUser(email, password, role);
-    const path =
-      userData.role.toLowerCase() === "departmenthead"
-        ? "/departmenthead/dashboard"
-        : `/${userData.role.toLowerCase()}/dashboard`;
-    navigate(path);
-  } catch (err) {
-    setError(err.message || t.failed);
-  }
-};
-
+    try {
+      const userData = await loginUser(email, password, role);
+      const path =
+        userData.role.toLowerCase() === "departmenthead"
+          ? "/departmenthead/dashboard"
+          : `/${userData.role.toLowerCase()}/dashboard`;
+      navigate(path);
+    } catch (err) {
+      setError(err.message || t.failed);
+    }
+  };
 
   return (
     <div
@@ -67,7 +89,7 @@ const LoginPage = () => {
         darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-100 text-gray-900"
       }`}
     >
-      {/* Back to Home Button */}
+      {/* Back to Home */}
       <div className="absolute top-5 left-5 z-20">
         <button
           onClick={() => navigate("/")}
@@ -80,7 +102,8 @@ const LoginPage = () => {
           &#8592; {t.backHome}
         </button>
       </div>
-      {/* Animated Background */}
+
+      {/* Background */}
       <div className="absolute inset-0 -z-10">
         <img
           src="/dtu-campus.jpg"
@@ -94,24 +117,9 @@ const LoginPage = () => {
               : "bg-gradient-to-br from-blue-500/40 via-purple-500/30 to-pink-400/20"
           }`}
         ></div>
-
-        <motion.div
-          animate={{ y: [0, 20, 0] }}
-          transition={{ duration: 6, repeat: Infinity }}
-          className={`absolute top-10 left-16 w-32 h-32 blur-3xl rounded-full ${
-            darkMode ? "bg-indigo-700/30" : "bg-blue-400/20"
-          }`}
-        ></motion.div>
-        <motion.div
-          animate={{ y: [0, -20, 0] }}
-          transition={{ duration: 7, repeat: Infinity }}
-          className={`absolute bottom-20 right-20 w-40 h-40 blur-3xl rounded-full ${
-            darkMode ? "bg-purple-900/30" : "bg-purple-500/20"
-          }`}
-        ></motion.div>
       </div>
 
-      {/* Login Card */}
+      {/* Login Form */}
       <motion.form
         onSubmit={handleSubmit}
         initial={{ opacity: 0, scale: 0.9, y: 30 }}
@@ -123,10 +131,11 @@ const LoginPage = () => {
             : "bg-white/80 border-gray-200 text-gray-900"
         }`}
       >
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-2">
-            <AcademicCapIcon className={`h-8 w-8 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`} />
+            <AcademicCapIcon
+              className={`h-8 w-8 ${darkMode ? "text-indigo-400" : "text-indigo-600"}`}
+            />
             <h1 className="text-3xl font-bold">{t.login}</h1>
           </div>
         </div>
@@ -135,7 +144,11 @@ const LoginPage = () => {
 
         {/* Email */}
         <div className="relative mb-4">
-          <UserIcon className={`absolute left-3 top-3 w-6 h-6 ${darkMode ? "text-gray-300" : "text-gray-500"}`} />
+          <UserIcon
+            className={`absolute left-3 top-3 w-6 h-6 ${
+              darkMode ? "text-gray-300" : "text-gray-500"
+            }`}
+          />
           <motion.input
             type="email"
             placeholder={t.email}
@@ -153,23 +166,47 @@ const LoginPage = () => {
 
         {/* Password */}
         <div className="relative mb-4">
-          <LockClosedIcon className={`absolute left-3 top-3 w-6 h-6 ${darkMode ? "text-gray-300" : "text-gray-500"}`} />
+          <LockClosedIcon
+            className={`absolute left-3 top-3 w-6 h-6 ${
+              darkMode ? "text-gray-300" : "text-gray-500"
+            }`}
+          />
           <motion.input
-            type="password"
+            type={showPassword ? "text" : "password"} 
             placeholder={t.password}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
             whileFocus={{ scale: 1.02 }}
-            className={`w-full pl-10 p-3 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-300 ${
+            className={`w-full pl-10 pr-10 p-3 rounded-lg border focus:outline-none focus:ring-2 transition-all duration-300 ${
               darkMode
                 ? "bg-gray-700 text-gray-100 border-gray-600 focus:ring-indigo-300"
                 : "bg-gray-50 text-gray-900 border-gray-200 focus:ring-indigo-400"
             }`}
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute right-3 top-3 w-6 h-6 text-gray-500 hover:text-indigo-500 transition"
+          >
+            {showPassword ? <EyeSlashIcon /> : <EyeIcon />}
+          </button>
         </div>
 
-        {/* Role Selection */}
+        {/* Forgot Password */}
+        <div className="text-right mb-4">
+          <button
+            type="button"
+            onClick={() => navigate("/forgot-password")}
+            className={`text-sm font-semibold underline hover:opacity-80 transition ${
+              darkMode ? "text-indigo-300" : "text-indigo-700"
+            }`}
+          >
+            {t.forgotPassword}
+          </button>
+        </div>
+
+        {/* Role */}
         <motion.select
           value={role}
           onChange={(e) => setRole(e.target.value)}
@@ -185,7 +222,7 @@ const LoginPage = () => {
           <option value="departmenthead">{t.deptHead}</option>
         </motion.select>
 
-        {/* Submit Button */}
+        {/* Submit */}
         <motion.button
           type="submit"
           whileHover={{ scale: 1.05, boxShadow: "0px 0px 20px rgba(79,70,229,0.6)" }}
@@ -200,14 +237,13 @@ const LoginPage = () => {
         </motion.button>
 
         {/* Footer */}
-       <p
-  className={`text-center mt-6 text-sm transition-colors duration-300 ${
-    darkMode ? "text-gray-300" : "text-gray-600"
-  }`}
->
-  {t.university}
-</p>
-
+        <p
+          className={`text-center mt-6 text-sm transition-colors duration-300 ${
+            darkMode ? "text-gray-300" : "text-gray-600"
+          }`}
+        >
+          {t.university}
+        </p>
       </motion.form>
     </div>
   );

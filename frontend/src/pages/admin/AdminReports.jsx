@@ -1,74 +1,131 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { useSettings } from "../../contexts/SettingsContext"; // darkMode and language context
+import { useSettings } from "../../contexts/SettingsContext";
 import axiosInstance from "../../utils/axiosInstance";
-import { FaUsers, FaFilePdf, FaFileExcel } from "react-icons/fa";
+import { 
+  FaUsers, FaFilePdf, FaFileExcel, FaCalendarTimes, 
+  FaClipboardList, FaBuilding, FaPaperPlane, FaUserSlash,
+  FaChartLine, FaDownload, FaSync, FaFilter, FaSearch,
+  FaEye, FaEyeSlash, FaSort, FaSortUp, FaSortDown,
+  FaUser, FaEnvelope, FaIdCard, FaBriefcase, FaDollarSign,
+  FaCalendarDay, FaPhone, FaMapMarkerAlt, FaVenusMars,
+  FaBirthdayCake, FaGraduationCap, FaHistory, FaUserFriends,
+  FaHeart, FaHome
+} from "react-icons/fa";
+import { motion, AnimatePresence } from "framer-motion";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 
+// Custom Notification Component
+const Notification = ({ type, message, onClose }) => {
+  const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -50 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -50 }}
+      className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-3 rounded-xl shadow-xl z-[100] flex items-center gap-3 min-w-[300px]`}
+    >
+      <span className="flex-1">{message}</span>
+      <button onClick={onClose} className="text-white hover:text-gray-200">
+        ✕
+      </button>
+    </motion.div>
+  );
+};
+
 const AdminReports = () => {
   const { user, loading: authLoading } = useAuth();
-  const { darkMode, language, setLanguage, setDarkMode } = useSettings();
+  const { darkMode, language } = useSettings();
   const [report, setReport] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
+  const [notification, setNotification] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'ascending' });
+  const [visibleColumns, setVisibleColumns] = useState({
+    photo: true, firstName: true, lastName: true, email: true, empId: true,
+    department: true, position: true, status: true, salary: true,
+    phone: true, address: true, dob: true, sex: true, maritalStatus: true,
+    qualification: true, experience: true, term: true,
+    contactPerson: true, contactAddress: true,
+    absentDays: true, leaveRequests: true
+  });
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
 
-  // Persist language and dark mode across sessions
-  useEffect(() => {
-    const storedLang = localStorage.getItem("language");
-    if (storedLang) setLanguage(storedLang);
-
-    const storedDark = localStorage.getItem("darkMode");
-    if (storedDark) setDarkMode(storedDark === "true");
-  }, [setLanguage, setDarkMode]);
-
-  useEffect(() => {
-    localStorage.setItem("language", language);
-  }, [language]);
-
-  useEffect(() => {
-    localStorage.setItem("darkMode", darkMode);
-  }, [darkMode]);
-
-  // Multilingual texts including table headers
-  const texts = {
+  // Multilingual text
+  const translations = {
     en: {
-      totalEmployees: "Total Employees",
-      employeeReports: "Employee Reports",
+      dashboard: "Employee Management Dashboard",
+      employeeReports: "All Employee Information",
       downloadPDF: "Download PDF",
       downloadExcel: "Download Excel",
-      noEmployeeData: "No employee data available.",
+      noEmployeeData: "No employee data available",
       photo: "Photo",
       firstName: "First Name",
       middleName: "Middle Name",
       lastName: "Last Name",
       email: "Email",
-      empId: "Emp ID",
+      empId: "Employee ID",
       department: "Department",
       position: "Position",
-      term: "Term",
-      sex: "Sex",
+      term: "Contract Term",
+      sex: "Gender",
       maritalStatus: "Marital Status",
       phone: "Phone",
       address: "Address",
-      contactPerson: "Contact Person",
-      contactAddress: "Contact Address",
+      contactPerson: "Emergency Contact",
+      contactAddress: "Emergency Address",
       salary: "Salary",
       experience: "Experience",
       qualification: "Qualification",
-      dob: "DOB",
+      dob: "Date of Birth",
       status: "Status",
       absentDays: "Absent Days",
-      leaveRequests: "Leave Requests"
+      leaveRequests: "Leave Requests",
+      totalEmployees: "Total Employees",
+      totalAbsent: "Total Absent Days",
+      totalLeave: "Total Leave Requests",
+      totalVacancy: "Active Vacancies",
+      totalRequisition: "Open Requisitions",
+      totalLeft: "Employees Left",
+      resetReport: "Reset Absence & Leave Records",
+      search: "Search employees...",
+      filter: "Filter by Status",
+      columns: "Visible Columns",
+      all: "All",
+      active: "Active",
+      inactive: "Inactive",
+      onLeave: "On Leave",
+      terminated: "Terminated",
+      loading: "Loading employee data...",
+      error: "Error loading data",
+      success: "Success",
+      reportReset: "Absence and leave records reset successfully",
+      reportError: "Failed to reset records",
+      exportSuccess: "Report exported successfully",
+      exportError: "Failed to export report",
+      statistics: "HR Statistics",
+      analytics: "Analytics Overview",
+      sortBy: "Sort by",
+      clearFilters: "Clear Filters",
+      customizeView: "Customize Columns",
+      apply: "Apply",
+      cancel: "Cancel",
+      showAllInfo: "Show All Information",
+      exportActions: "Export Options",
+      employeeDetails: "Employee Details"
     },
     am: {
-      totalEmployees: "አጠቃላይ ሰራተኞች",
-      employeeReports: "የሰራተኞች ሪፖርት",
+      dashboard: "የሰራተኞች አስተዳደር ዳሽቦርድ",
+      employeeReports: "ሁሉም የሰራተኞች መረጃ",
       downloadPDF: "PDF አውርድ",
       downloadExcel: "Excel አውርድ",
-      noEmployeeData: "ምንም የሰራተኞች መረጃ የለም።",
+      noEmployeeData: "ምንም የሰራተኞች መረጃ የለም",
       photo: "ፎቶ",
       firstName: "ስም",
       middleName: "የአባት ስም",
@@ -82,225 +139,1216 @@ const AdminReports = () => {
       maritalStatus: "የጋብቻ ሁኔታ",
       phone: "ስልክ",
       address: "አድራሻ",
-      contactPerson: "የእውቀት ሰው",
-      contactAddress: "የእውቀት አድራሻ",
+      contactPerson: "አደጋ የግንኙነት ሰው",
+      contactAddress: "አደጋ የግንኙነት አድራሻ",
       salary: "ደመወዝ",
       experience: "ልምድ",
       qualification: "ትምህርት ዝግጅት",
       dob: "የትውልድ ቀን",
       status: "ሁኔታ",
       absentDays: "የአመራር ቀናት",
-      leaveRequests: "የፈቃድ ጥያቄዎች"
-    },
+      leaveRequests: "የፈቃድ ጥያቄዎች",
+      totalEmployees: "አጠቃላይ ሰራተኞች",
+      totalAbsent: "አጠቃላይ የአመራር ቀናት",
+      totalLeave: "አጠቃላይ የፈቃድ ጥያቄዎች",
+      totalVacancy: "ንቁ ቦታዎች",
+      totalRequisition: "ክፍት ጥያቄዎች",
+      totalLeft: "የተሰረዙ ሰራተኞች",
+      resetReport: "የአመራር እና ፈቃድ መዛግብቶች አደስ",
+      search: "ሰራተኞችን ፈልግ...",
+      filter: "በሁኔታ አጣራ",
+      columns: "የሚታዩ አምዶች",
+      all: "ሁሉም",
+      active: "ንቁ",
+      inactive: "ንቁ ያልሆነ",
+      onLeave: "በፈቃድ ላይ",
+      terminated: "የተሰረዘ",
+      loading: "የሰራተኞች መረጃ በመጫን ላይ...",
+      error: "መረጃ ማምጣት አልተሳካም",
+      success: "ተሳክቷል",
+      reportReset: "የአመራር እና ፈቃድ መዛግብቶች በተሳካ ሁኔታ ተደስሷል",
+      reportError: "መዛግብቶች መደሰስ አልተሳካም",
+      exportSuccess: "ሪፖርት በተሳካ ሁኔታ ተላከ",
+      exportError: "ሪፖርት መላክ አልተሳካም",
+      statistics: "HR ስታቲስቲክስ",
+      analytics: "የትንታኔ አጠቃላይ እይታ",
+      sortBy: "በዚህ አደራጅ",
+      clearFilters: "ማጣሪያዎችን አጽዳ",
+      customizeView: "አምዶች አበጅ",
+      apply: "ተግብር",
+      cancel: "ይቅር",
+      showAllInfo: "ሁሉንም መረጃ አሳይ",
+      exportActions: "የማውጫ አማራጮች",
+      employeeDetails: "የሰራተኛ ዝርዝሮች"
+    }
   };
 
-  const t = texts[language] || texts.en;
+  const t = translations[language] || translations.en;
+
+  // Show notification
+  const showNotification = (type, message) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  // Get employee photo URL - fixed version
+  const getEmployeePhotoUrl = (photoPath) => {
+    if (!photoPath) return null;
+    
+    // Remove leading slash if present
+    const cleanPath = photoPath.startsWith('/') ? photoPath.substring(1) : photoPath;
+    
+    // Check if it's already a full URL
+    if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
+      return photoPath;
+    }
+    
+    // For Vite development - use relative path
+    return `/api/${cleanPath}`;
+  };
+
+  // Fetch report & summary
+  const fetchReport = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setErrorMsg("No user logged in.");
+      setLoading(false);
+      return;
+    }
+    if (user.role.toLowerCase() !== "admin") {
+      setErrorMsg(`Access denied. Your role: ${user.role}`);
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const { data } = await axiosInstance.get("/reports/admin");
+      
+      const employees = Array.isArray(data.employees) ? data.employees : [];
+      const processedEmployees = employees.map(emp => ({
+        ...emp,
+        absentDays: emp.absentDays || 0,
+        leaveRequests: emp.leaveRequests || 0,
+        photoUrl: getEmployeePhotoUrl(emp.photo)
+      }));
+      
+      setReport(processedEmployees);
+      
+      setSummary({
+        totalEmployees: processedEmployees.length,
+        totalAbsent: processedEmployees.reduce((acc, emp) => acc + (emp.absentDays || 0), 0),
+        totalLeave: processedEmployees.reduce((acc, emp) => acc + (emp.leaveRequests || 0), 0),
+        totalVacancy: data.totalVacancies || 0,
+        totalRequisition: data.totalRequisitions || 0,
+        totalLeft: data.totalLeftEmployees || 0,
+        activeEmployees: processedEmployees.filter(emp => emp.employeeStatus === 'Active').length,
+        averageSalary: processedEmployees.length > 0 
+          ? Math.round(processedEmployees.reduce((acc, emp) => acc + (parseFloat(emp.salary) || 0), 0) / processedEmployees.length)
+          : 0
+      });
+      
+      setErrorMsg("");
+    } catch (err) {
+      console.error("Report fetch error:", err);
+      const errorMessage = err.response?.data?.message || t.error;
+      setErrorMsg(errorMessage);
+      showNotification('error', errorMessage);
+    } finally { 
+      setLoading(false); 
+    }
+  }, [user, authLoading, t.error]);
 
   useEffect(() => {
-    const fetchReport = async () => {
-      if (authLoading) return;
-      if (!user) {
-        setErrorMsg("No user logged in.");
-        setLoading(false);
-        return;
-      }
-      if (user.role.toLowerCase() !== "admin") {
-        setErrorMsg(`Access denied. Your role: ${user.role}`);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const { data } = await axiosInstance.get("/reports/admin");
-        setReport(Array.isArray(data.employees) ? data.employees : []);
-        setSummary({
-          totalEmployees: data.employees?.length || 0,
-        });
-      } catch (err) {
-        console.error("Report fetch error:", err);
-        setErrorMsg(err.response?.data?.message || "Failed to fetch report");
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchReport();
-  }, [user, authLoading]);
+  }, [fetchReport]);
 
-  const exportPDF = () => {
-    const doc = new jsPDF("l", "pt", "a4");
-    const tableColumn = [
-      t.firstName, t.middleName, t.lastName, t.email, t.empId,
-      t.department, t.position, t.term, t.sex, t.maritalStatus,
-      t.phone, t.address, t.contactPerson, t.contactAddress,
-      t.salary, t.experience, t.qualification, t.dob, t.status,
-      t.absentDays, t.leaveRequests
-    ];
+  const resetReport = async () => {
+    if (!window.confirm(language === 'am' 
+      ? 'የአመራር እና ፈቃድ መዛግብቶችን ለማደስ እርግጠኛ ነዎት?' 
+      : 'Are you sure you want to reset the absence and leave records?')) return;
+    
+    try {
+      await axiosInstance.post("/reports/admin/reset");
+      setReport(prev => prev.map(emp => ({ 
+        ...emp, 
+        absentDays: 0, 
+        leaveRequests: 0 
+      })));
+      setSummary(prev => ({ 
+        ...prev, 
+        totalAbsent: 0, 
+        totalLeave: 0 
+      }));
+      showNotification('success', t.reportReset);
+    } catch (err) {
+      console.error("Reset error:", err);
+      showNotification('error', t.reportError);
+    }
+  };
 
-    const tableRows = report.map(emp => [
-      emp.firstName || "-", emp.middleName || "-", emp.lastName || "-", emp.email || "-", emp.empId || "-",
-      typeof emp.department === "object" ? emp.department?.name || "-" : emp.department || "-",
-      emp.typeOfPosition || "-", emp.termOfEmployment || "-", emp.sex || "-", emp.maritalStatus || "-",
-      emp.phoneNumber || "-", emp.address || "-", emp.contactPerson || "-", emp.contactPersonAddress || "-",
-      emp.salary || "-", emp.experience || "-", emp.qualification || "-", emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "-",
-      emp.employeeStatus || "-", emp.absentDays ?? 0, emp.leaveRequests ?? 0
-    ]);
+  // Sort function
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
 
-    doc.setFontSize(14);
-    doc.text("DTU HRMS Employee Report", 40, 40);
-    doc.setFontSize(12);
-    doc.text(`${t.totalEmployees}: ${summary.totalEmployees || 0}`, 40, 70);
-
-    autoTable(doc, {
-      head: [tableColumn],
-      body: tableRows,
-      startY: 90,
-      theme: "striped",
-      headStyles: { fillColor: darkMode ? [75, 85, 99] : [34, 197, 94] },
-      styles: { fontSize: 9, textColor: darkMode ? [255,255,255] : [0,0,0] },
-      margin: { left: 20, right: 20 },
+  // Get sorted data
+  const getSortedData = () => {
+    if (!sortConfig.key) return filteredReport;
+    
+    return [...filteredReport].sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+      
+      // Handle nested objects
+      if (sortConfig.key === 'department' && typeof a.department === 'object') {
+        aValue = a.department?.name || '';
+        bValue = b.department?.name || '';
+      }
+      
+      // Handle numeric values
+      if (['salary', 'absentDays', 'leaveRequests'].includes(sortConfig.key)) {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      }
+      
+      // Handle dates
+      if (sortConfig.key === 'dob' || sortConfig.key === 'dateOfBirth') {
+        aValue = aValue ? new Date(aValue) : new Date(0);
+        bValue = bValue ? new Date(bValue) : new Date(0);
+      }
+      
+      if (aValue < bValue) {
+        return sortConfig.direction === 'ascending' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'ascending' ? 1 : -1;
+      }
+      return 0;
     });
+  };
 
-    doc.save("employee_report.pdf");
+  // Filter report based on search and status
+  const filteredReport = report.filter((emp) => {
+    const matchesSearch = searchTerm === "" || 
+      (emp.firstName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (emp.lastName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (emp.email?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (emp.empId?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (emp.phoneNumber?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (typeof emp.department === 'object' ? 
+        emp.department?.name?.toLowerCase().includes(searchTerm.toLowerCase()) : 
+        emp.department?.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = 
+      statusFilter === "all" || 
+      emp.employeeStatus?.toLowerCase() === statusFilter.toLowerCase();
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  const sortedReport = getSortedData();
+
+  // Export functions
+  const exportPDF = () => {
+    try {
+      const doc = new jsPDF("l", "pt", "a4");
+      
+      // Header
+      doc.setFontSize(20);
+      doc.setTextColor(44, 62, 80);
+      doc.text("DTU HRMS - Complete Employee Report", 40, 40);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(128, 128, 128);
+      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 40, 65);
+      doc.text(`Total Employees: ${summary.totalEmployees}`, 40, 85);
+      
+      // Main table - simplified columns for PDF
+      const tableColumn = [
+        t.photo, t.empId, t.firstName, t.lastName, t.email,
+        t.department, t.position, t.status,
+        t.salary, t.phone, t.dob
+      ];
+      
+      const tableRows = sortedReport.map(emp => [
+        '📷',
+        emp.empId || '-',
+        emp.firstName || '-',
+        emp.lastName || '-',
+        emp.email || '-',
+        typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-',
+        emp.typeOfPosition || '-',
+        emp.employeeStatus || '-',
+        emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-',
+        emp.phoneNumber || '-',
+        emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-'
+      ]);
+      
+      autoTable(doc, {
+        startY: 100,
+        head: [tableColumn],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { fillColor: [75, 85, 99] },
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: {
+          0: { cellWidth: 20 },
+          8: { halign: 'right' }
+        },
+        margin: { left: 40, right: 40 }
+      });
+      
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(128, 128, 128);
+        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 100, doc.internal.pageSize.height - 20);
+        doc.text("DTU HRMS - Confidential", 40, doc.internal.pageSize.height - 20);
+      }
+      
+      doc.save(`employee_complete_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      showNotification('success', t.exportSuccess);
+    } catch (error) {
+      console.error("PDF export error:", error);
+      showNotification('error', t.exportError);
+    }
   };
 
   const exportExcel = () => {
-    const totalsRow = [{
-      [t.firstName]: `${t.totalEmployees}: ${summary.totalEmployees || 0}`,
-    }];
-
-    const worksheet = XLSX.utils.json_to_sheet([
-      ...totalsRow,
-      ...report.map(emp => ({
-        [t.firstName]: emp.firstName,
-        [t.middleName]: emp.middleName,
-        [t.lastName]: emp.lastName,
-        [t.email]: emp.email,
-        [t.empId]: emp.empId,
-        [t.department]: typeof emp.department === "object" ? emp.department?.name || "-" : emp.department || "-",
-        [t.position]: emp.typeOfPosition,
-        [t.term]: emp.termOfEmployment,
-        [t.sex]: emp.sex,
-        [t.maritalStatus]: emp.maritalStatus,
-        [t.phone]: emp.phoneNumber,
-        [t.address]: emp.address,
-        [t.contactPerson]: emp.contactPerson,
-        [t.contactAddress]: emp.contactPersonAddress,
-        [t.salary]: emp.salary,
-        [t.experience]: emp.experience,
-        [t.qualification]: emp.qualification,
-        [t.dob]: emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "-",
-        [t.status]: emp.employeeStatus,
-        [t.absentDays]: emp.absentDays ?? 0,
-        [t.leaveRequests]: emp.leaveRequests ?? 0,
-      })),
-    ]);
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
-    XLSX.writeFile(workbook, "employee_report.xlsx");
+    try {
+      // Prepare data with all columns
+      const excelData = sortedReport.map(emp => ({
+        [t.photo]: '📷',
+        [t.empId]: emp.empId || '-',
+        [t.firstName]: emp.firstName || '-',
+        [t.middleName]: emp.middleName || '-',
+        [t.lastName]: emp.lastName || '-',
+        [t.email]: emp.email || '-',
+        [t.phone]: emp.phoneNumber || '-',
+        [t.dob]: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-',
+        [t.sex]: emp.sex || '-',
+        [t.maritalStatus]: emp.maritalStatus || '-',
+        [t.department]: typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-',
+        [t.position]: emp.typeOfPosition || '-',
+        [t.term]: emp.termOfEmployment || '-',
+        [t.status]: emp.employeeStatus || '-',
+        [t.salary]: emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-',
+        [t.experience]: emp.experience || '-',
+        [t.qualification]: emp.qualification || '-',
+        [t.address]: emp.address || '-',
+        [t.contactPerson]: emp.contactPerson || '-',
+        [t.contactAddress]: emp.contactPersonAddress || '-',
+        [t.absentDays]: emp.absentDays || 0,
+        [t.leaveRequests]: emp.leaveRequests || 0
+      }));
+      
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+      
+      // Add summary sheet
+      const summarySheet = XLSX.utils.aoa_to_sheet([
+        ["DTU HRMS - Complete Employee Report"],
+        [`Generated: ${new Date().toLocaleDateString()}`],
+        [],
+        ["HR Statistics Summary"],
+        [],
+        ["Metric", "Value"],
+        [t.totalEmployees, summary.totalEmployees],
+        [t.totalAbsent, summary.totalAbsent],
+        [t.totalLeave, summary.totalLeave],
+        [t.totalVacancy, summary.totalVacancy],
+        [t.totalRequisition, summary.totalRequisition],
+        [t.totalLeft, summary.totalLeft],
+        ["Active Employees", summary.activeEmployees || 0],
+        ["Average Salary", summary.averageSalary ? `$${summary.averageSalary.toLocaleString()}` : '-']
+      ]);
+      
+      XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
+      XLSX.utils.book_append_sheet(wb, ws, "Employees");
+      
+      // Auto-size columns
+      const wscols = [];
+      for (let i = 0; i < excelData.length; i++) {
+        const maxLength = Math.max(...excelData.map(row => String(row[Object.keys(row)[i]]).length));
+        wscols.push({ wch: Math.min(maxLength + 5, 30) });
+      }
+      ws['!cols'] = wscols;
+      
+      // Save file
+      XLSX.writeFile(wb, `hrms_complete_report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showNotification('success', t.exportSuccess);
+    } catch (error) {
+      console.error("Excel export error:", error);
+      showNotification('error', t.exportError);
+    }
   };
 
-  if (authLoading || loading) return <p className="p-6 text-gray-700">Loading report...</p>;
-  if (errorMsg) return <p className="p-6 text-red-600">{errorMsg}</p>;
+  // Get sort icon
+  const getSortIcon = (key) => {
+    if (sortConfig.key !== key) return <FaSort className="ml-1 opacity-50" />;
+    return sortConfig.direction === 'ascending' ? 
+      <FaSortUp className="ml-1" /> : 
+      <FaSortDown className="ml-1" />;
+  };
+
+  // Get status color
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
+      case 'inactive': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
+      case 'on leave': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
+      case 'terminated': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    }
+  };
+
+  // Get column icon
+  const getColumnIcon = (column) => {
+    switch (column) {
+      case 'photo': return <FaUser />;
+      case 'firstName': return <FaUser />;
+      case 'lastName': return <FaUser />;
+      case 'email': return <FaEnvelope />;
+      case 'empId': return <FaIdCard />;
+      case 'department': return <FaBuilding />;
+      case 'position': return <FaBriefcase />;
+      case 'salary': return <FaDollarSign />;
+      case 'phone': return <FaPhone />;
+      case 'address': return <FaMapMarkerAlt />;
+      case 'dob': return <FaBirthdayCake />;
+      case 'sex': return <FaVenusMars />;
+      case 'maritalStatus': return <FaHeart />;
+      case 'qualification': return <FaGraduationCap />;
+      case 'experience': return <FaHistory />;
+      case 'term': return <FaCalendarDay />;
+      case 'contactPerson': return <FaUserFriends />;
+      case 'contactAddress': return <FaHome />;
+      case 'absentDays': return <FaCalendarTimes />;
+      case 'leaveRequests': return <FaClipboardList />;
+      case 'status': return <FaChartLine />;
+      default: return <FaUser />;
+    }
+  };
+
+  if (authLoading || loading) {
+    return (
+      <div className={`flex items-center justify-center min-h-screen ${darkMode ? "bg-gray-900" : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50"}`}>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <p className={`mt-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.loading}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (errorMsg) {
+    return (
+      <div className={`flex items-center justify-center min-h-screen ${darkMode ? "bg-gray-900" : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50"}`}>
+        <div className={`p-8 rounded-2xl shadow-xl text-center ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <div className="text-6xl mb-4 text-red-500">⚠️</div>
+          <h3 className="text-xl font-bold mb-2">{t.error}</h3>
+          <p className={`mb-4 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{errorMsg}</p>
+          <button
+            onClick={fetchReport}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-6 py-2 rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all duration-300"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className={`${darkMode ? "bg-gray-900 text-gray-200" : "bg-gray-50 text-gray-900"} p-6 min-h-screen transition-colors duration-300`}>
-      {/* Summary Card: Only Total Employees */}
-      <div className="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
-        <div className="bg-white dark:bg-gray-800 shadow rounded p-4 flex flex-col items-center justify-center">
-          <FaUsers className="text-4xl text-indigo-500 mb-2" />
-          <span>{t.totalEmployees}</span>
-          <span className="text-2xl font-bold">{summary.totalEmployees || 0}</span>
+    <div className={`p-4 md:p-6 min-h-screen ${darkMode ? "bg-gray-900 text-white" : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 text-gray-900"}`}>
+      {/* Notification */}
+      <AnimatePresence>
+        {notification && (
+          <Notification
+            type={notification.type}
+            message={notification.message}
+            onClose={() => setNotification(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-purple-800 dark:text-white mb-2">{t.dashboard}</h1>
+            <p className={`${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              {t.employeeDetails}
+            </p>
+          </div>
+          
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => setShowColumnSelector(!showColumnSelector)}
+            className={`px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 transition-all duration-300 ${
+              darkMode 
+                ? "bg-gray-800 hover:bg-gray-700 text-white" 
+                : "bg-white hover:bg-gray-50 text-gray-800 border border-gray-200"
+            }`}
+          >
+            <FaEye /> {t.customizeView}
+          </motion.button>
         </div>
       </div>
 
-      {/* Report Title & Buttons */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-3">
-        <h2 className="text-3xl font-bold mb-4 md:mb-0">{t.employeeReports}</h2>
-        <div className="flex flex-wrap gap-3">
-          <button onClick={exportPDF} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded shadow transition">
-            <FaFilePdf /> {t.downloadPDF}
-          </button>
-          <button onClick={exportExcel} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded shadow transition">
-            <FaFileExcel /> {t.downloadExcel}
-          </button>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className={`p-6 rounded-2xl shadow-xl transition-transform duration-300 hover:scale-105 ${
+          darkMode ? "bg-gradient-to-r from-gray-800 to-gray-700" : "bg-gradient-to-r from-white to-gray-50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm font-medium mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{t.totalEmployees}</p>
+              <p className="text-3xl font-bold text-purple-600">{summary.totalEmployees || 0}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="h-2 flex-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-purple-500" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-purple-500 bg-opacity-20 rounded-xl">
+              <FaUsers className="text-3xl text-purple-500" />
+            </div>
+          </div>
+        </div>
+        
+        <div className={`p-6 rounded-2xl shadow-xl transition-transform duration-300 hover:scale-105 ${
+          darkMode ? "bg-gradient-to-r from-gray-800 to-gray-700" : "bg-gradient-to-r from-white to-gray-50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm font-medium mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{t.totalAbsent}</p>
+              <p className="text-3xl font-bold text-red-600">{summary.totalAbsent || 0}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="h-2 flex-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-red-500" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-red-500 bg-opacity-20 rounded-xl">
+              <FaCalendarTimes className="text-3xl text-red-500" />
+            </div>
+          </div>
+        </div>
+        
+        <div className={`p-6 rounded-2xl shadow-xl transition-transform duration-300 hover:scale-105 ${
+          darkMode ? "bg-gradient-to-r from-gray-800 to-gray-700" : "bg-gradient-to-r from-white to-gray-50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm font-medium mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{t.totalLeave}</p>
+              <p className="text-3xl font-bold text-blue-600">{summary.totalLeave || 0}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="h-2 flex-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-blue-500" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-blue-500 bg-opacity-20 rounded-xl">
+              <FaClipboardList className="text-3xl text-blue-500" />
+            </div>
+          </div>
+        </div>
+        
+        <div className={`p-6 rounded-2xl shadow-xl transition-transform duration-300 hover:scale-105 ${
+          darkMode ? "bg-gradient-to-r from-gray-800 to-gray-700" : "bg-gradient-to-r from-white to-gray-50"
+        }`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm font-medium mb-1 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{t.totalVacancy}</p>
+              <p className="text-3xl font-bold text-green-600">{summary.totalVacancy || 0}</p>
+              <div className="flex items-center gap-2 mt-2">
+                <div className="h-2 flex-1 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500" style={{ width: '100%' }}></div>
+                </div>
+              </div>
+            </div>
+            <div className="p-3 bg-green-500 bg-opacity-20 rounded-xl">
+              <FaBuilding className="text-3xl text-green-500" />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Filters and Search */}
+      <div className={`rounded-2xl shadow-lg p-6 mb-8 ${
+        darkMode ? "bg-gray-800" : "bg-white"
+      }`}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="md:col-span-2">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder={t.search}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`w-full p-4 pl-12 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
+                  darkMode 
+                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
+                    : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
+                }`}
+              />
+              <div className="absolute left-4 top-1/2 transform -translate-y-1/2">
+                <FaSearch className={`w-5 h-5 ${darkMode ? "text-gray-400" : "text-gray-500"}`} />
+              </div>
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className={`flex-1 p-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
+                darkMode 
+                  ? "bg-gray-700 border-gray-600 text-white" 
+                  : "bg-gray-50 border border-gray-200 text-gray-900"
+              }`}
+            >
+              <option value="all">{t.filter}: {t.all}</option>
+              <option value="active">{t.active}</option>
+              <option value="inactive">{t.inactive}</option>
+              <option value="on leave">{t.onLeave}</option>
+              <option value="terminated">{t.terminated}</option>
+            </select>
+            
+            {(searchTerm || statusFilter !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setStatusFilter("all");
+                }}
+                className={`px-4 py-3 rounded-xl font-medium transition-all duration-300 ${
+                  darkMode 
+                    ? "bg-gray-700 hover:bg-gray-600 text-white" 
+                    : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                }`}
+              >
+                {t.clearFilters}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Column Selector Modal */}
+      <AnimatePresence>
+        {showColumnSelector && (
+          <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className={`rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[80vh] overflow-y-auto ${
+                darkMode ? "bg-gray-800 text-white" : "bg-white text-gray-900"
+              }`}
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold">{t.columns}</h3>
+                <button 
+                  onClick={() => setShowColumnSelector(false)}
+                  className="text-gray-500 hover:text-red-500 text-2xl"
+                >
+                  &times;
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {Object.keys(visibleColumns).map((column) => (
+                  <div key={column} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={column}
+                      checked={visibleColumns[column]}
+                      onChange={(e) => setVisibleColumns({
+                        ...visibleColumns,
+                        [column]: e.target.checked
+                      })}
+                      className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                    />
+                    <label htmlFor={column} className="ml-2 flex items-center gap-2">
+                      <span className="text-gray-500">{getColumnIcon(column)}</span>
+                      <span>{t[column] || column}</span>
+                    </label>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => setShowColumnSelector(false)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
+                    darkMode 
+                      ? "bg-gray-700 hover:bg-gray-600 text-white" 
+                      : "bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  }`}
+                >
+                  {t.cancel}
+                </button>
+                <button
+                  onClick={() => setShowColumnSelector(false)}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-300"
+                >
+                  {t.apply}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Employee Table */}
-      <div className="overflow-x-auto bg-white dark:bg-gray-800 shadow rounded p-4">
-        <table className="min-w-full border-collapse table-auto">
-          <thead className="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-200 sticky top-0">
-            <tr>
-              <th className="p-2 border">{t.photo}</th>
-              <th className="p-2 border">{t.firstName}</th>
-              <th className="p-2 border">{t.middleName}</th>
-              <th className="p-2 border">{t.lastName}</th>
-              <th className="p-2 border">{t.email}</th>
-              <th className="p-2 border">{t.empId}</th>
-              <th className="p-2 border">{t.department}</th>
-              <th className="p-2 border">{t.position}</th>
-              <th className="p-2 border">{t.term}</th>
-              <th className="p-2 border">{t.sex}</th>
-              <th className="p-2 border">{t.maritalStatus}</th>
-              <th className="p-2 border">{t.phone}</th>
-              <th className="p-2 border">{t.address}</th>
-              <th className="p-2 border">{t.contactPerson}</th>
-              <th className="p-2 border">{t.contactAddress}</th>
-              <th className="p-2 border">{t.salary}</th>
-              <th className="p-2 border">{t.experience}</th>
-              <th className="p-2 border">{t.qualification}</th>
-              <th className="p-2 border">{t.dob}</th>
-              <th className="p-2 border">{t.status}</th>
-              <th className="p-2 border">{t.absentDays}</th>
-              <th className="p-2 border">{t.leaveRequests}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {report.length > 0 ? (
-              report.map(emp => (
-                <tr key={emp._id} className="hover:bg-gray-50 dark:hover:bg-gray-700 border-b">
-                  <td className="p-2 border text-center">
-                    {emp.photo ? (
-                      <img
-                        src={`http://localhost:5000${emp.photo}`}
-                        alt="Employee"
-                        className="w-12 h-12 rounded-full object-cover mx-auto"
-                      />
-                    ) : "No Photo"}
-                  </td>
-                  <td className="p-2 border">{emp.firstName || "-"}</td>
-                  <td className="p-2 border">{emp.middleName || "-"}</td>
-                  <td className="p-2 border">{emp.lastName || "-"}</td>
-                  <td className="p-2 border">{emp.email || "-"}</td>
-                  <td className="p-2 border">{emp.empId || "-"}</td>
-                  <td className="p-2 border">{typeof emp.department === "object" ? emp.department?.name || "-" : emp.department || "-"}</td>
-                  <td className="p-2 border">{emp.typeOfPosition || "-"}</td>
-                  <td className="p-2 border">{emp.termOfEmployment || "-"}</td>
-                  <td className="p-2 border">{emp.sex || "-"}</td>
-                  <td className="p-2 border">{emp.maritalStatus || "-"}</td>
-                  <td className="p-2 border">{emp.phoneNumber || "-"}</td>
-                  <td className="p-2 border">{emp.address || "-"}</td>
-                  <td className="p-2 border">{emp.contactPerson || "-"}</td>
-                  <td className="p-2 border">{emp.contactPersonAddress || "-"}</td>
-                  <td className="p-2 border">{emp.salary || "-"}</td>
-                  <td className="p-2 border">{emp.experience || "-"}</td>
-                  <td className="p-2 border">{emp.qualification || "-"}</td>
-                  <td className="p-2 border">{emp.dateOfBirth ? emp.dateOfBirth.split("T")[0] : "-"}</td>
-                  <td className="p-2 border">{emp.employeeStatus || "-"}</td>
-                  <td className="p-2 border">{emp.absentDays ?? 0}</td>
-                  <td className="p-2 border">{emp.leaveRequests ?? 0}</td>
-                </tr>
-              ))
-            ) : (
+      <div className={`rounded-2xl shadow-xl overflow-hidden mb-8 ${
+        darkMode ? "bg-gray-800" : "bg-white"
+      }`}>
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead className={`font-semibold ${
+              darkMode 
+                ? "bg-gradient-to-r from-gray-900 to-gray-800 text-white" 
+                : "bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-900"
+            }`}>
               <tr>
-                <td colSpan="22" className="text-center p-4 text-gray-500 dark:text-gray-400">
-                  {t.noEmployeeData}
-                </td>
+                {visibleColumns.photo && (
+                  <th className="p-4 text-left sticky left-0 bg-inherit">
+                    <div className="flex items-center">
+                      {getColumnIcon('photo')}
+                      <span className="ml-2">{t.photo}</span>
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.firstName && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('firstName')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('firstName')}
+                      <span className="ml-2">{t.firstName}</span>
+                      {getSortIcon('firstName')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.lastName && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('lastName')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('lastName')}
+                      <span className="ml-2">{t.lastName}</span>
+                      {getSortIcon('lastName')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.email && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('email')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('email')}
+                      <span className="ml-2">{t.email}</span>
+                      {getSortIcon('email')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.empId && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('empId')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('empId')}
+                      <span className="ml-2">{t.empId}</span>
+                      {getSortIcon('empId')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.department && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('department')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('department')}
+                      <span className="ml-2">{t.department}</span>
+                      {getSortIcon('department')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.position && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('typeOfPosition')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('position')}
+                      <span className="ml-2">{t.position}</span>
+                      {getSortIcon('typeOfPosition')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.status && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('employeeStatus')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('status')}
+                      <span className="ml-2">{t.status}</span>
+                      {getSortIcon('employeeStatus')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.salary && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('salary')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('salary')}
+                      <span className="ml-2">{t.salary}</span>
+                      {getSortIcon('salary')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.phone && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('phoneNumber')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('phone')}
+                      <span className="ml-2">{t.phone}</span>
+                      {getSortIcon('phoneNumber')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.address && (
+                  <th className="p-4 text-left">
+                    <div className="flex items-center">
+                      {getColumnIcon('address')}
+                      <span className="ml-2">{t.address}</span>
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.dob && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('dateOfBirth')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('dob')}
+                      <span className="ml-2">{t.dob}</span>
+                      {getSortIcon('dateOfBirth')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.sex && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('sex')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('sex')}
+                      <span className="ml-2">{t.sex}</span>
+                      {getSortIcon('sex')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.maritalStatus && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('maritalStatus')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('maritalStatus')}
+                      <span className="ml-2">{t.maritalStatus}</span>
+                      {getSortIcon('maritalStatus')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.qualification && (
+                  <th className="p-4 text-left">
+                    <div className="flex items-center">
+                      {getColumnIcon('qualification')}
+                      <span className="ml-2">{t.qualification}</span>
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.experience && (
+                  <th className="p-4 text-left">
+                    <div className="flex items-center">
+                      {getColumnIcon('experience')}
+                      <span className="ml-2">{t.experience}</span>
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.term && (
+                  <th className="p-4 text-left">
+                    <div className="flex items-center">
+                      {getColumnIcon('term')}
+                      <span className="ml-2">{t.term}</span>
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.absentDays && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('absentDays')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('absentDays')}
+                      <span className="ml-2">{t.absentDays}</span>
+                      {getSortIcon('absentDays')}
+                    </div>
+                  </th>
+                )}
+                {visibleColumns.leaveRequests && (
+                  <th 
+                    className="p-4 text-left cursor-pointer hover:bg-opacity-80 transition-colors duration-300"
+                    onClick={() => requestSort('leaveRequests')}
+                  >
+                    <div className="flex items-center">
+                      {getColumnIcon('leaveRequests')}
+                      <span className="ml-2">{t.leaveRequests}</span>
+                      {getSortIcon('leaveRequests')}
+                    </div>
+                  </th>
+                )}
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sortedReport.length > 0 ? (
+                sortedReport.map((emp, index) => {
+                  const photoUrl = getEmployeePhotoUrl(emp.photo);
+                  return (
+                    <tr 
+                      key={emp._id}
+                      className={`border-b transition-all duration-300 ${
+                        darkMode 
+                          ? "hover:bg-gray-750 border-gray-700" 
+                          : "hover:bg-purple-50/50 border-gray-100"
+                      } ${index % 2 === 0 ? (darkMode ? "bg-gray-800/50" : "bg-gray-50/50") : ""}`}
+                    >
+                      {visibleColumns.photo && (
+                        <td className="p-4 sticky left-0 bg-inherit">
+                          {photoUrl ? (
+                            <img 
+                              src={photoUrl} 
+                              alt="Employee" 
+                              className="w-14 h-14 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600 shadow-sm"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
+                                e.target.className = "w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 p-2";
+                              }}
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-200 to-blue-200 dark:from-purple-700 dark:to-blue-700 flex items-center justify-center shadow-sm">
+                              <FaUsers className="text-2xl text-purple-600 dark:text-purple-300" />
+                            </div>
+                          )}
+                        </td>
+                      )}
+                      {visibleColumns.firstName && (
+                        <td className="p-4 font-medium">
+                          <div className="flex flex-col">
+                            <span>{emp.firstName} {emp.middleName || ''}</span>
+                            <span className="text-sm text-gray-500 dark:text-gray-400">{emp.lastName}</span>
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.lastName && (
+                        <td className="p-4 font-medium">
+                          {emp.lastName}
+                        </td>
+                      )}
+                      {visibleColumns.email && (
+                        <td className="p-4">
+                          <a 
+                            href={`mailto:${emp.email}`}
+                            className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-2"
+                          >
+                            <FaEnvelope className="text-sm" />
+                            {emp.email}
+                          </a>
+                        </td>
+                      )}
+                      {visibleColumns.empId && (
+                        <td className="p-4 font-mono font-medium">
+                          <div className="flex items-center gap-2">
+                            <FaIdCard className="text-gray-500" />
+                            {emp.empId}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.department && (
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <FaBuilding className="text-gray-500" />
+                            {typeof emp.department === "object" ? emp.department?.name : emp.department}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.position && (
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <FaBriefcase className="text-gray-500" />
+                            {emp.typeOfPosition}
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.status && (
+                        <td className="p-4">
+                          <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${getStatusColor(emp.employeeStatus)}`}>
+                            {emp.employeeStatus}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.salary && (
+                        <td className="p-4 font-medium">
+                          {emp.salary ? (
+                            <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                              
+                              <span>{parseFloat(emp.salary).toLocaleString()}</span>
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.phone && (
+                        <td className="p-4">
+                          {emp.phoneNumber ? (
+                            <div className="flex items-center gap-2">
+                              <FaPhone className="text-gray-500" />
+                              <a href={`tel:${emp.phoneNumber}`} className="hover:text-blue-600 dark:hover:text-blue-400">
+                                {emp.phoneNumber}
+                              </a>
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.address && (
+                        <td className="p-4 max-w-xs truncate">
+                          {emp.address ? (
+                            <div className="flex items-center gap-2">
+                              <FaMapMarkerAlt className="text-gray-500 flex-shrink-0" />
+                              <span className="truncate">{emp.address}</span>
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.dob && (
+                        <td className="p-4">
+                          {emp.dateOfBirth ? (
+                            <div className="flex items-center gap-2">
+                              <FaBirthdayCake className="text-gray-500" />
+                              {emp.dateOfBirth.split('T')[0]}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.sex && (
+                        <td className="p-4">
+                          {emp.sex ? (
+                            <div className="flex items-center gap-2">
+                              <FaVenusMars className="text-gray-500" />
+                              {emp.sex}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.maritalStatus && (
+                        <td className="p-4">
+                          {emp.maritalStatus ? (
+                            <div className="flex items-center gap-2">
+                              <FaHeart className="text-gray-500" />
+                              {emp.maritalStatus}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.qualification && (
+                        <td className="p-4">
+                          {emp.qualification ? (
+                            <div className="flex items-center gap-2">
+                              <FaGraduationCap className="text-gray-500" />
+                              {emp.qualification}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.experience && (
+                        <td className="p-4">
+                          {emp.experience ? (
+                            <div className="flex items-center gap-2">
+                              <FaHistory className="text-gray-500" />
+                              {emp.experience}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.term && (
+                        <td className="p-4">
+                          {emp.termOfEmployment ? (
+                            <div className="flex items-center gap-2">
+                              <FaCalendarDay className="text-gray-500" />
+                              {emp.termOfEmployment}
+                            </div>
+                          ) : '-'}
+                        </td>
+                      )}
+                      {visibleColumns.absentDays && (
+                        <td className="p-4 text-center">
+                          <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                            emp.absentDays > 10 
+                              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+                              : emp.absentDays > 5
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+                              : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                          }`}>
+                            {emp.absentDays || 0}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.leaveRequests && (
+                        <td className="p-4 text-center">
+                          <span className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                            emp.leaveRequests > 5 
+                              ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300"
+                              : emp.leaveRequests > 2
+                              ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300"
+                              : "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300"
+                          }`}>
+                            {emp.leaveRequests || 0}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td 
+                    colSpan={Object.values(visibleColumns).filter(v => v).length} 
+                    className="text-center p-12"
+                  >
+                    <div className={`text-6xl mb-4 ${darkMode ? "text-gray-700" : "text-gray-300"}`}>📊</div>
+                    <p className={`text-xl ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                      {t.noEmployeeData}
+                    </p>
+                    {searchTerm && (
+                      <p className={`mt-2 ${darkMode ? "text-gray-500" : "text-gray-600"}`}>
+                        No results found for "{searchTerm}"
+                      </p>
+                    )}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        
+        {/* Table Footer with Export and Reset Buttons */}
+        <div className={`p-6 border-t ${
+          darkMode ? "border-gray-700 bg-gray-800" : "border-gray-200 bg-gray-50"
+        }`}>
+          <div className="flex flex-col gap-6">
+            {/* Export Options */}
+            <div>
+              <h3 className={`text-lg font-bold mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+                {t.exportActions}
+              </h3>
+              <div className="flex flex-wrap gap-4">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={exportPDF}
+                  className="bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 transition-all duration-300"
+                >
+                  <FaFilePdf className="text-xl" />
+                  <div className="text-left">
+                    <div className="font-bold">{t.downloadPDF}</div>
+                    <div className="text-sm opacity-90">Download as PDF file</div>
+                  </div>
+                </motion.button>
+                
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={exportExcel}
+                  className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 transition-all duration-300"
+                >
+                  <FaFileExcel className="text-xl" />
+                  <div className="text-left">
+                    <div className="font-bold">{t.downloadExcel}</div>
+                    <div className="text-sm opacity-90">Download as Excel file</div>
+                  </div>
+                </motion.button>
+              </div>
+            </div>
+            
+            {/* Reset Records Section */}
+            <div className="pt-4 border-t border-gray-300 dark:border-gray-700">
+              <h3 className={`text-lg font-bold mb-4 ${darkMode ? "text-gray-300" : "text-gray-800"}`}>
+                Reset Records
+              </h3>
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className={`${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                  <p className="mb-2">Reset all absence days and leave request counts to zero.</p>
+                  <p className="text-sm">This action will reset the accumulated records for all employees.</p>
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={resetReport}
+                  className="bg-gradient-to-r from-gray-700 to-gray-800 hover:from-gray-800 hover:to-gray-900 text-white px-8 py-3 rounded-xl shadow-lg flex items-center gap-3 transition-all duration-300 whitespace-nowrap"
+                >
+                  <FaSync className="text-xl" />
+                  <span>{t.resetReport}</span>
+                </motion.button>
+              </div>
+            </div>
+            
+            {/* Summary Info */}
+            <div className="pt-4 border-t border-gray-300 dark:border-gray-700">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                  Showing {sortedReport.length} of {report.length} employees
+                  {searchTerm && ` matching "${searchTerm}"`}
+                  {statusFilter !== 'all' && ` with status "${statusFilter}"`}
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                    {t.sortBy}: {sortConfig.key ? t[sortConfig.key] || sortConfig.key : 'None'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -151,10 +151,12 @@ const DeptHeadAttendance = () => {
 
       let alertMessage = "";
       employees.forEach(emp => {
-        const empRecords = res.data.filter(r => r.employeeId === emp._id && r.status === "Absent");
-        if (empRecords.length > 0) {
-          alertMessage += `⚠️ ${emp.firstName} ${emp.lastName} absent today.\n`;
-        }
+        const empRecords = history.flatMap(day =>
+  day.records
+    .filter(r => r.employeeId === emp._id && r.status === "Absent")
+    .map(r => day.date)
+);
+
       });
 
       setMessage(alertMessage || t.attendanceSubmitted);
@@ -205,9 +207,12 @@ const DeptHeadAttendance = () => {
   };
 
   const handleEmployeeClick = (emp) => {
-    const empRecords = history.flatMap(rec =>
-      rec.records.filter(r => r.employeeId === emp._id && r.status === "Absent").map(r => rec.date)
-    );
+    const empRecords = history.flatMap(day =>
+  day.records
+    .filter(r => r.employeeId === emp._id && r.status === "Absent")
+    .map(r => day.date)
+);
+
     setSelectedEmployeeAbsentDates(empRecords);
     setSelectedEmployeeName(`${emp.firstName} ${emp.lastName}`);
     setEmployeeAbsentModal(true);
