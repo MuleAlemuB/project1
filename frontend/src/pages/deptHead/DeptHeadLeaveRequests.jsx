@@ -1,4 +1,3 @@
-// src/pages/deptHead/DeptHeadLeaveRequests.jsx
 import React, { useEffect, useState } from "react";
 import axios from "../../utils/axiosInstance";
 import { useAuth } from "../../contexts/AuthContext";
@@ -11,16 +10,120 @@ import {
   FaEye,
   FaInfoCircle,
   FaList,
+  FaCalendarAlt,
+  FaUser,
+  FaEnvelope,
+  FaBuilding,
+  FaFileAlt,
+  FaPaperPlane,
+  FaClock,
+  FaCheckCircle,
+  FaTimesCircle,
+  FaHourglassHalf,
 } from "react-icons/fa";
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
+
+const translations = {
+  en: {
+    title: "Leave Management",
+    employeeRequests: "Employee Requests",
+    myLeaveRequests: "My Leave Requests",
+    showAll: "Show All",
+    showPendingOnly: "Show Pending Only",
+    applyLeave: "Apply for Leave",
+    startDate: "Start Date",
+    endDate: "End Date",
+    reason: "Reason",
+    attachments: "Attachments",
+    submit: "Submit",
+    cancel: "Cancel",
+    noLeaveRequests: "No leave requests",
+    details: "Details",
+    approve: "Approve",
+    reject: "Reject",
+    delete: "Delete",
+    employee: "Employee",
+    status: "Status",
+    actions: "Actions",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    department: "Department",
+    email: "Email",
+    loading: "Loading leave requests...",
+    notAuthorized: "Not authorized",
+    leaveSubmitted: "Leave request submitted successfully",
+    leaveFailed: "Failed to submit leave request",
+    deleteConfirm: "Are you sure you want to delete this request?",
+    deleteSuccess: "Leave request deleted",
+    deleteFailed: "Failed to delete leave request",
+    decisionSuccess: "Leave request updated",
+    decisionFailed: "Failed to update leave request",
+    selectFiles: "Select files",
+    filesSelected: "file(s) selected",
+    viewDetails: "View Details",
+    closeDetails: "Close Details",
+    leaveForm: "Leave Application Form",
+    manageRequests: "Manage Employee Requests",
+    myLeaves: "My Leave History",
+    applyNewLeave: "Apply New Leave",
+  },
+  am: {
+    title: "የቅድመ ፈቃድ አስተዳደር",
+    employeeRequests: "ሰራተኞች ጥያቄዎች",
+    myLeaveRequests: "የእኔ ፈቃድ ጥያቄዎች",
+    showAll: "ሁሉንም ይሳዩ",
+    showPendingOnly: "ቅድመ ፈቃድ ብቻ ይሳዩ",
+    applyLeave: "ፈቃድ ይጠይቁ",
+    startDate: "የመጀመሪያ ቀን",
+    endDate: "የመጨረሻ ቀን",
+    reason: "ምክንያት",
+    attachments: "አባሪዎች",
+    submit: "ላክ",
+    cancel: "ሰርዝ",
+    noLeaveRequests: "ምንም ፈቃድ ጥያቄዎች የሉም",
+    details: "ዝርዝሮች",
+    approve: "ይፀድቁ",
+    reject: "ይክሰሱ",
+    delete: "ማጥፋት",
+    employee: "ሰራተኛ",
+    status: "ሁኔታ",
+    actions: "ድርጊቶች",
+    pending: "በመጠባበቅ ላይ",
+    approved: "ተፀድቋል",
+    rejected: "ተመላሽ ሆኗል",
+    department: "ክፍል",
+    email: "ኢሜይል",
+    loading: "ፈቃድ ጥያቄዎች በመጫን ላይ...",
+    notAuthorized: "ፈቃድ የለዎትም",
+    leaveSubmitted: "ፈቃድ ጥያቄ በትክክል ተልኳል",
+    leaveFailed: "ፈቃድ ጥያቄ ማስተላለፍ አልተቻለም",
+    deleteConfirm: "ይህን ጥያቄ ማጥፋት እፈልጋለሁ?",
+    deleteSuccess: "ፈቃድ ጥያቄ ተሰርዟል",
+    deleteFailed: "ፈቃድ ጥያቄ ማጥፋት አልተሳካም",
+    decisionSuccess: "ፈቃድ ጥያቄ ተሻሽሏል",
+    decisionFailed: "ፈቃድ ጥያቄ ማሻሻያ አልተሳካም",
+    selectFiles: "ፋይሎችን ይምረጡ",
+    filesSelected: "ፋይል(ዎች) ተመርጠዋል",
+    viewDetails: "ዝርዝሮችን አሳይ",
+    closeDetails: "ዝርዝሮችን ዝጋ",
+    leaveForm: "የፈቃድ ማመልከቻ ቅጽ",
+    manageRequests: "የሰራተኞች ጥያቄዎችን ያስተዳድሩ",
+    myLeaves: "የእኔ የፈቃድ ታሪክ",
+    applyNewLeave: "አዲስ ፈቃድ ይጠይቁ",
+  },
+};
 
 const DeptHeadLeaveRequests = () => {
   const { user, loading: authLoading } = useAuth();
   const { darkMode, language } = useSettings();
+  const t = translations[language];
 
   const [employeeLeaves, setEmployeeLeaves] = useState([]);
   const [myLeaves, setMyLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("employee"); // "employee" or "myLeave"
+  const [activeTab, setActiveTab] = useState("employee");
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -28,6 +131,7 @@ const DeptHeadLeaveRequests = () => {
   const [attachments, setAttachments] = useState([]);
   const [detailsOpen, setDetailsOpen] = useState({});
   const [showAll, setShowAll] = useState(false);
+  const [message, setMessage] = useState("");
 
   // Fetch leave requests
   const fetchRequests = async () => {
@@ -40,6 +144,7 @@ const DeptHeadLeaveRequests = () => {
       setMyLeaves(myRes.data || []);
     } catch (err) {
       console.error(err);
+      setMessage(t.decisionFailed);
     } finally {
       setLoading(false);
     }
@@ -53,21 +158,24 @@ const DeptHeadLeaveRequests = () => {
   const handleDecision = async (id, status) => {
     try {
       await axios.put(`/leaves/requests/${id}/status`, { status });
+      setMessage(t.decisionSuccess);
       fetchRequests();
     } catch (err) {
       console.error(err);
+      setMessage(t.decisionFailed);
     }
   };
 
   // Delete leave request
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this request?")) return;
+    if (!window.confirm(t.deleteConfirm)) return;
     try {
       await axios.delete(`/leaves/requests/${id}`);
+      setMessage(t.deleteSuccess);
       fetchRequests();
     } catch (err) {
       console.error(err);
-      alert("Failed to delete leave request");
+      setMessage(t.deleteFailed);
     }
   };
 
@@ -81,304 +189,457 @@ const DeptHeadLeaveRequests = () => {
     attachments.forEach((f) => formData.append("attachments", f));
 
     try {
-      const res = await axios.post("/leaves/requests", formData, {
+      await axios.post("/leaves/requests", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      alert(res.data.message || "Leave request submitted successfully");
+      setMessage(t.leaveSubmitted);
       setShowApplyForm(false);
       setStartDate("");
       setEndDate("");
       setReason("");
       setAttachments([]);
       fetchRequests();
-      setActiveTab("myLeave"); // Switch to my leave tab after applying
+      setActiveTab("myLeave");
     } catch (err) {
       console.error(err);
-      alert("Failed to submit leave request");
+      setMessage(t.leaveFailed);
     }
   };
 
-  if (authLoading || loading) return <div>Loading...</div>;
-  if (!user) return <div>Not authorized</div>;
+  const handleToggleShowAll = () => {
+    setShowAll((prev) => !prev);
+    setDetailsOpen({});
+  };
 
-  // Filter employee leaves by pending or all
+  if (authLoading || loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}>
+        <div className="text-center">
+          <div className={`w-12 h-12 border-4 rounded-full animate-spin ${darkMode ? "border-blue-500 border-t-transparent" : "border-blue-600 border-t-transparent"}`}></div>
+          <p className={`mt-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.loading}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gray-900" : "bg-gray-50"}`}>
+        <p className={darkMode ? "text-gray-300" : "text-gray-600"}>{t.notAuthorized}</p>
+      </div>
+    );
+  }
+
   const filteredEmployeeLeaves = showAll
     ? employeeLeaves
     : employeeLeaves.filter((r) => r.status === "pending");
 
-  // Toggle Show All / Pending Only
-  const handleToggleShowAll = () => {
-    setShowAll((prev) => !prev);
-    setDetailsOpen({}); // collapse details when toggling
-  };
-
   return (
-    <div
-      className={`p-6 min-h-screen ${
-        darkMode ? "bg-gray-900 text-gray-200" : "bg-gray-50 text-gray-800"
-      }`}
-    >
-      <h1 className="text-3xl font-bold mb-6">
-        {language === "am" ? "የቅድመ ፈቃድ አስተዳደር" : "Leave Management"}
-      </h1>
+    <div className={`min-h-screen p-6 ${darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"}`}>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold mb-2">{t.title}</h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          {activeTab === "employee" ? t.manageRequests : t.myLeaves}
+        </p>
+      </div>
 
-      {/* Top buttons */}
-      <div className="flex gap-4 mb-6 flex-wrap">
-        <button
-          onClick={() => {
-            setActiveTab("employee");
-            setShowApplyForm(false);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded font-semibold ${
-            activeTab === "employee"
-              ? "bg-blue-600 text-white"
-              : darkMode
-              ? "bg-gray-700 text-gray-200"
-              : "bg-gray-200 text-gray-800"
-          }`}
-        >
-          <FaEye /> {language === "am" ? "ሰራተኞች ጥያቄዎች" : "Employee Requests"}
-        </button>
+      {/* Message Alert */}
+      {message && (
+        <div className={`mb-6 p-4 rounded-lg ${message.includes("success") ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"}`}>
+          {message}
+        </div>
+      )}
 
-        <button
-          onClick={() => {
-            setActiveTab("myLeave");
-            setShowApplyForm(true);
-          }}
-          className={`flex items-center gap-2 px-4 py-2 rounded font-semibold ${
-            activeTab === "myLeave"
-              ? "bg-green-600 text-white"
-              : darkMode
-              ? "bg-gray-700 text-gray-200"
-              : "bg-gray-200 text-gray-800"
-          }`}
-        >
-          <FaPlus /> {language === "am" ? "የእኔ ፈቃድ ጥያቄዎች" : "My Leave Requests"}
-        </button>
-
+      {/* Tabs */}
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex space-x-2">
+          <button
+            onClick={() => { setActiveTab("employee"); setShowApplyForm(false); }}
+            className={`px-4 py-2 rounded-lg transition-colors ${activeTab === "employee" ? "bg-blue-600 text-white" : darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+          >
+            {t.employeeRequests}
+          </button>
+          <button
+            onClick={() => { setActiveTab("myLeave"); setShowApplyForm(true); }}
+            className={`px-4 py-2 rounded-lg transition-colors ${activeTab === "myLeave" ? "bg-blue-600 text-white" : darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
+          >
+            {t.myLeaveRequests}
+          </button>
+        </div>
+        
         {activeTab === "employee" && (
           <button
             onClick={handleToggleShowAll}
-            className={`flex items-center gap-2 px-4 py-2 rounded font-semibold ${
-              showAll
-                ? "bg-yellow-500 text-white"
-                : darkMode
-                ? "bg-gray-700 text-gray-200"
-                : "bg-gray-200 text-gray-800"
-            }`}
+            className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${showAll ? "bg-yellow-600 text-white hover:bg-yellow-700" : darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
           >
-            <FaList />{" "}
-            {showAll
-              ? language === "am"
-                ? "ቅድመ ፈቃድ ብቻ ይሳዩ"
-                : "Show Pending Only"
-              : language === "am"
-              ? "ሁሉንም ይሳዩ"
-              : "Show All"}
+            <FaList />
+            {showAll ? t.showPendingOnly : t.showAll}
           </button>
         )}
       </div>
 
       {/* Apply Leave Form */}
       {showApplyForm && (
-        <form onSubmit={handleApplySubmit} className="mb-6 p-4 rounded bg-gray-800 text-white">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="p-2 rounded text-gray-800"
-            />
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="p-2 rounded text-gray-800"
-            />
-            <textarea
-              placeholder="Reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="p-2 rounded text-gray-800"
-            />
-            <input
-              type="file"
-              multiple
-              onChange={(e) => setAttachments(Array.from(e.target.files))}
-              className="p-2 rounded text-gray-800"
-            />
-          </div>
-          <button type="submit" className="mt-3 bg-green-600 px-4 py-2 rounded text-white">
-            Submit
-          </button>
-        </form>
+        <div className={`mb-8 p-6 rounded-xl border ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <FaPaperPlane className="text-blue-500" />
+            {t.leaveForm}
+          </h2>
+          
+          <form onSubmit={handleApplySubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <FaCalendarAlt className="text-gray-400" />
+                  {t.startDate} *
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  required
+                  className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    darkMode 
+                      ? "bg-gray-700 border-gray-600 text-gray-100" 
+                      : "bg-white border-gray-300 text-gray-900"
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <FaCalendarAlt className="text-gray-400" />
+                  {t.endDate} *
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  required
+                  className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    darkMode 
+                      ? "bg-gray-700 border-gray-600 text-gray-100" 
+                      : "bg-white border-gray-300 text-gray-900"
+                  }`}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <FaFileAlt className="text-gray-400" />
+                  {t.reason} *
+                </label>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  required
+                  rows={4}
+                  className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    darkMode 
+                      ? "bg-gray-700 border-gray-600 text-gray-100" 
+                      : "bg-white border-gray-300 text-gray-900"
+                  }`}
+                  placeholder={language === "en" ? "Enter reason for leave..." : "ለፈቃድ ምክንያት ያስገቡ..."}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-2 flex items-center gap-2">
+                  <FaFileAlt className="text-gray-400" />
+                  {t.attachments}
+                </label>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setAttachments(Array.from(e.target.files))}
+                  className={`w-full px-4 py-2 rounded-lg border ${darkMode ? "bg-gray-700 border-gray-600" : "bg-white border-gray-300"}`}
+                />
+                {attachments.length > 0 && (
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    {attachments.length} {t.filesSelected}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                type="submit"
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              >
+                <FaPaperPlane />
+                {t.submit}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowApplyForm(false)}
+                className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                {t.cancel}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Employee Requests Table */}
       {activeTab === "employee" && (
-        <table className="min-w-full table-auto border border-gray-300 dark:border-gray-600 mb-6">
-          <thead className="bg-gray-200 dark:bg-gray-700">
-            <tr>
-              <th className="px-3 py-2">Employee</th>
-              <th className="px-3 py-2">Start</th>
-              <th className="px-3 py-2">End</th>
-              <th className="px-3 py-2">Reason</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredEmployeeLeaves.length === 0 ? (
-              <tr>
-                <td colSpan="6" className="text-center p-4">
-                  No leave requests
-                </td>
-              </tr>
-            ) : (
-              filteredEmployeeLeaves.map((r) => (
-                <React.Fragment key={r._id}>
-                  <tr className="border-b border-gray-300 dark:border-gray-600">
-                    <td className="px-3 py-2">{r.requesterName}</td>
-                    <td className="px-3 py-2">{new Date(r.startDate).toLocaleDateString()}</td>
-                    <td className="px-3 py-2">{new Date(r.endDate).toLocaleDateString()}</td>
-                    <td className="px-3 py-2">{r.reason}</td>
-                    <td className="px-3 py-2 capitalize">{r.status}</td>
-                    <td className="px-3 py-2 flex gap-2">
-                      <button
-                        onClick={() =>
-                          setDetailsOpen((prev) => ({ ...prev, [r._id]: !prev[r._id] }))
-                        }
-                        className="bg-blue-500 p-2 rounded text-white flex items-center gap-1"
-                      >
-                        <FaInfoCircle /> {language === "am" ? "ዝርዝር" : "Details"}
-                      </button>
-                      <button
-                        onClick={() => handleDelete(r._id)}
-                        className="bg-gray-500 p-2 rounded text-white"
-                      >
-                        <FaTrash />
-                      </button>
+        <div className={`rounded-xl border overflow-hidden ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
+          <div className="overflow-x-auto">
+            <table className={`min-w-full ${darkMode ? "bg-gray-800 text-gray-100" : "bg-white text-gray-900"}`}>
+              <thead className={darkMode ? "bg-gray-700" : "bg-gray-100"}>
+                <tr>
+                  <th className="p-4 text-left font-medium">{t.employee}</th>
+                  <th className="p-4 text-left font-medium">{t.startDate}</th>
+                  <th className="p-4 text-left font-medium">{t.endDate}</th>
+                  <th className="p-4 text-left font-medium">{t.reason}</th>
+                  <th className="p-4 text-left font-medium">{t.status}</th>
+                  <th className="p-4 text-left font-medium">{t.actions}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEmployeeLeaves.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="p-8 text-center text-gray-500 dark:text-gray-400">
+                      {t.noLeaveRequests}
                     </td>
                   </tr>
+                ) : (
+                  filteredEmployeeLeaves.map((request) => (
+                    <React.Fragment key={request._id}>
+                      <tr className={`border-t ${darkMode ? "border-gray-700 hover:bg-gray-700/50" : "border-gray-200 hover:bg-gray-50"}`}>
+                        <td className="p-4">
+                          <div className="font-medium">{request.requesterName}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                            {request.department}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          {new Date(request.startDate).toLocaleDateString()}
+                        </td>
+                        <td className="p-4">
+                          {new Date(request.endDate).toLocaleDateString()}
+                        </td>
+                        <td className="p-4">
+                          <div className="max-w-xs truncate">{request.reason}</div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2 py-1 rounded text-sm font-medium ${
+                            request.status === "approved"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                              : request.status === "rejected"
+                              ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                              : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                          }`}>
+                            {request.status === "approved" && <FaCheckCircle className="inline mr-1" />}
+                            {request.status === "rejected" && <FaTimesCircle className="inline mr-1" />}
+                            {request.status === "pending" && <FaHourglassHalf className="inline mr-1" />}
+                            {t[request.status] || request.status}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setDetailsOpen(prev => ({ ...prev, [request._id]: !prev[request._id] }))}
+                              className={`px-3 py-1 rounded flex items-center gap-1 text-sm ${
+                                darkMode 
+                                  ? "bg-gray-700 hover:bg-gray-600 text-gray-200" 
+                                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                              }`}
+                            >
+                              <FaEye />
+                              {detailsOpen[request._id] ? t.closeDetails : t.viewDetails}
+                            </button>
+                            
+                            {request.status === "pending" && (
+                              <>
+                                <button
+                                  onClick={() => handleDecision(request._id, "approved")}
+                                  className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-sm"
+                                >
+                                  <FaCheck />
+                                  {t.approve}
+                                </button>
+                                <button
+                                  onClick={() => handleDecision(request._id, "rejected")}
+                                  className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
+                                >
+                                  <FaTimes />
+                                  {t.reject}
+                                </button>
+                              </>
+                            )}
+                            
+                            <button
+                              onClick={() => handleDelete(request._id)}
+                              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
+                            >
+                              <FaTrash />
+                              {t.delete}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                  {/* Details Row */}
-                  {detailsOpen[r._id] && (
-                    <tr className="bg-gray-100 dark:bg-gray-700">
-                      <td colSpan="6" className="p-4">
-                        <div className="space-y-2">
-                          <p>
-                            <span className="font-semibold">Employee:</span> {r.requesterName}
-                          </p>
-                          <p>
-                            <span className="font-semibold">Email:</span> {r.requesterEmail}
-                          </p>
-                          <p>
-                            <span className="font-semibold">Department:</span> {r.department}
-                          </p>
-                          <p>
-                            <span className="font-semibold">Start Date:</span>{" "}
-                            {new Date(r.startDate).toLocaleDateString()}
-                          </p>
-                          <p>
-                            <span className="font-semibold">End Date:</span>{" "}
-                            {new Date(r.endDate).toLocaleDateString()}
-                          </p>
-                          <p>
-                            <span className="font-semibold">Reason:</span> {r.reason}
-                          </p>
-                          <p>
-                            <span className="font-semibold">Status:</span> {r.status}
-                          </p>
+                      {/* Details Row */}
+                      {detailsOpen[request._id] && (
+                        <tr className={darkMode ? "bg-gray-700/30" : "bg-gray-50"}>
+                          <td colSpan="6" className="p-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <DetailItem
+                                  icon={<FaUser />}
+                                  label={t.employee}
+                                  value={request.requesterName}
+                                  darkMode={darkMode}
+                                />
+                                <DetailItem
+                                  icon={<FaEnvelope />}
+                                  label={t.email}
+                                  value={request.requesterEmail}
+                                  darkMode={darkMode}
+                                />
+                                <DetailItem
+                                  icon={<FaBuilding />}
+                                  label={t.department}
+                                  value={request.department}
+                                  darkMode={darkMode}
+                                />
+                              </div>
+                              
+                              <div className="space-y-3">
+                                <DetailItem
+                                  icon={<FaCalendarAlt />}
+                                  label={t.startDate}
+                                  value={new Date(request.startDate).toLocaleDateString()}
+                                  darkMode={darkMode}
+                                />
+                                <DetailItem
+                                  icon={<FaCalendarAlt />}
+                                  label={t.endDate}
+                                  value={new Date(request.endDate).toLocaleDateString()}
+                                  darkMode={darkMode}
+                                />
+                                <DetailItem
+                                  icon={<FaFileAlt />}
+                                  label={t.reason}
+                                  value={request.reason}
+                                  darkMode={darkMode}
+                                />
+                              </div>
 
-                          {r.attachments && r.attachments.length > 0 && (
-                            <div>
-                              <span className="font-semibold">Attachments:</span>
-                              <ul className="list-disc list-inside">
-                                {r.attachments.map((file, i) => (
-                                  <li key={i}>
-                                    <a
-                                      href={`/uploads/${file}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-blue-500 underline"
-                                    >
-                                      {file}
-                                    </a>
-                                  </li>
-                                ))}
-                              </ul>
+                              {/* Attachments */}
+                              {request.attachments && request.attachments.length > 0 && (
+                                <div className="md:col-span-2">
+                                  <p className="text-sm font-medium mb-2">{t.attachments}:</p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {request.attachments.map((file, index) => (
+                                      <a
+                                        key={index}
+                                        href={`${BACKEND_URL}/${file}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`px-3 py-1 rounded flex items-center gap-2 text-sm ${
+                                          darkMode 
+                                            ? "bg-gray-700 hover:bg-gray-600 text-blue-400" 
+                                            : "bg-gray-100 hover:bg-gray-200 text-blue-600"
+                                        }`}
+                                      >
+                                        <FaFileAlt />
+                                        {file.split("/").pop()}
+                                      </a>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          )}
-
-                          {r.status === "pending" && (
-                            <div className="flex gap-2 mt-2">
-                              <button
-                                onClick={() => handleDecision(r._id, "approved")}
-                                className="bg-green-500 p-2 rounded text-white flex items-center gap-1"
-                              >
-                                <FaCheck /> {language === "am" ? "ይፀድቁ" : "Approve"}
-                              </button>
-                              <button
-                                onClick={() => handleDecision(r._id, "rejected")}
-                                className="bg-red-500 p-2 rounded text-white flex items-center gap-1"
-                              >
-                                <FaTimes /> {language === "am" ? "ይክሰሱ" : "Reject"}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* My Leave Requests Table */}
       {activeTab === "myLeave" && (
-        <table className="min-w-full table-auto border border-gray-300 dark:border-gray-600">
-          <thead className="bg-gray-200 dark:bg-gray-700">
-            <tr>
-              <th className="px-3 py-2">Start</th>
-              <th className="px-3 py-2">End</th>
-              <th className="px-3 py-2">Reason</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {myLeaves.length === 0 ? (
-              <tr>
-                <td colSpan="5" className="text-center p-4">
-                  No leave requests
-                </td>
-              </tr>
-            ) : (
-              myLeaves.map((r) => (
-                <tr key={r._id} className="border-b border-gray-300 dark:border-gray-600">
-                  <td className="px-3 py-2">{new Date(r.startDate).toLocaleDateString()}</td>
-                  <td className="px-3 py-2">{new Date(r.endDate).toLocaleDateString()}</td>
-                  <td className="px-3 py-2">{r.reason}</td>
-                  <td className="px-3 py-2 capitalize">{r.status}</td>
-                  <td className="px-3 py-2">
-                    <button
-                      onClick={() => handleDelete(r._id)}
-                      className="bg-gray-500 p-2 rounded text-white"
-                    >
-                      <FaTrash />
-                    </button>
-                  </td>
+        <div className={`rounded-xl border overflow-hidden ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
+          <div className="overflow-x-auto">
+            <table className={`min-w-full ${darkMode ? "bg-gray-800 text-gray-100" : "bg-white text-gray-900"}`}>
+              <thead className={darkMode ? "bg-gray-700" : "bg-gray-100"}>
+                <tr>
+                  <th className="p-4 text-left font-medium">{t.startDate}</th>
+                  <th className="p-4 text-left font-medium">{t.endDate}</th>
+                  <th className="p-4 text-left font-medium">{t.reason}</th>
+                  <th className="p-4 text-left font-medium">{t.status}</th>
+                  <th className="p-4 text-left font-medium">{t.actions}</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {myLeaves.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="p-8 text-center text-gray-500 dark:text-gray-400">
+                      {t.noLeaveRequests}
+                    </td>
+                  </tr>
+                ) : (
+                  myLeaves.map((request) => (
+                    <tr key={request._id} className={`border-t ${darkMode ? "border-gray-700 hover:bg-gray-700/50" : "border-gray-200 hover:bg-gray-50"}`}>
+                      <td className="p-4">
+                        {new Date(request.startDate).toLocaleDateString()}
+                      </td>
+                      <td className="p-4">
+                        {new Date(request.endDate).toLocaleDateString()}
+                      </td>
+                      <td className="p-4">
+                        <div className="max-w-xs truncate">{request.reason}</div>
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-sm font-medium ${
+                          request.status === "approved"
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                            : request.status === "rejected"
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                        }`}>
+                          {t[request.status] || request.status}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <button
+                          onClick={() => handleDelete(request._id)}
+                          className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
+                        >
+                          <FaTrash />
+                          {t.delete}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </div>
   );
 };
+
+// Helper component for detail items
+const DetailItem = ({ icon, label, value, darkMode }) => (
+  <div>
+    <div className="flex items-center gap-2 mb-1">
+      <div className="text-gray-500 dark:text-gray-400">{icon}</div>
+      <p className="text-sm text-gray-600 dark:text-gray-400">{label}</p>
+    </div>
+    <p className="font-medium">{value || <span className="text-gray-400 italic">N/A</span>}</p>
+  </div>
+);
 
 export default DeptHeadLeaveRequests;

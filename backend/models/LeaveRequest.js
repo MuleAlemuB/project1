@@ -57,7 +57,10 @@ const leaveRequestSchema = new mongoose.Schema(
       required: true,
     },
 
-    attachments: [{ type: String }],
+     attachments: [{
+      name: { type: String, required: true },
+      url: { type: String, required: true }
+    }],
 
     status: {
       type: String,

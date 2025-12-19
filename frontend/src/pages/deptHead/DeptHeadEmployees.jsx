@@ -2,22 +2,30 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
 import axiosInstance from "../../utils/axiosInstance";
-import { motion } from "framer-motion";
 import {
   FaEnvelope,
   FaPhone,
   FaUserTie,
   FaBuilding,
   FaMapMarkerAlt,
-  FaBirthdayCake,
   FaIdBadge,
   FaDollarSign,
   FaUsers,
   FaSearch,
   FaVenusMars,
   FaGraduationCap,
+  FaCalendar,
+  FaEdit,
+  FaTrash,
+  FaEye,
+  FaBirthdayCake,
+  FaAddressCard,
+  FaUser,
   FaClock,
-  FaAddressBook,
+  FaFileContract,
+  FaHome,
+  FaHeart,
+  FaRing,
 } from "react-icons/fa";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
@@ -26,71 +34,96 @@ const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 const translations = {
   en: {
     employeesIn: "Employees in",
-    searchPlaceholder: "Search by name...",
-    loading: "Loading...",
+    searchPlaceholder: "Search employees...",
+    loading: "Loading employees...",
     notAuthorized: "Not authorized",
-    deleteConfirm: "Are you sure you want to delete this employee?",
-    deleteSuccess: "Employee deleted successfully",
-    deleteFailed: "Failed to delete employee",
-    updateFailed: "Failed to update employee",
+    deleteConfirm: "Delete this employee?",
+    deleteSuccess: "Employee deleted",
+    deleteFailed: "Delete failed",
+    updateFailed: "Update failed",
     view: "View",
     edit: "Edit",
     delete: "Delete",
-    noEmployees: "No employees found.",
+    noEmployees: "No employees found",
     email: "Email",
-    phone: "Phone",
+    phoneNumber: "Phone Number",
     gender: "Gender",
     qualification: "Qualification",
-    term: "Term",
     department: "Department",
     address: "Address",
-    dob: "DOB",
+    dateOfBirth: "Date of Birth",
     empId: "Employee ID",
     salary: "Salary",
     experience: "Experience",
-    contactPerson: "Contact Person",
-    contactAddress: "Contact Address",
-    saveChanges: "Save Changes",
+    contactPerson: "Emergency Contact",
+    contactPersonAddress: "Contact Person Address",
+    saveChanges: "Save",
+    position: "Position",
+    employeeStatus: "Employee Status",
+    firstName: "First Name",
+    lastName: "Last Name",
+    middleName: "Middle Name",
+    sex: "Gender",
+    typeOfPosition: "Position Type",
+    termOfEmployment: "Term of Employment",
+    maritalStatus: "Marital Status",
+    photo: "Photo",
+    personalInfo: "Personal Information",
+    employmentInfo: "Employment Information",
+    contactInfo: "Contact Information",
+    fullName: "Full Name",
   },
   am: {
     employeesIn: "በዚህ ክፍል ያሉ ሰራተኞች",
-    searchPlaceholder: "በስም ይፈልጉ...",
-    loading: "በመጫን ላይ...",
+    searchPlaceholder: "ሰራተኞችን ይፈልጉ...",
+    loading: "ሰራተኞች በመጫን ላይ...",
     notAuthorized: "ፈቃድ የለዎትም",
     deleteConfirm: "ይህን ሰራተኛ ማጥፋት ትፈልጋለዎት?",
-    deleteSuccess: "ሰራተኛ በትክክል ተሰርዟል",
-    deleteFailed: "ሰራተኛን ማጥፋት አልተቻለም",
-    updateFailed: "ሰራተኛን ማዘምን አልተቻለም",
+    deleteSuccess: "ሰራተኛ ተሰርዟል",
+    deleteFailed: "ማጥፋት አልተቻለም",
+    updateFailed: "ማዘምን አልተቻለም",
     view: "እይ",
     edit: "አርትዕ",
     delete: "አጥፋ",
     noEmployees: "ሰራተኞች አልተገኙም",
     email: "ኢሜይል",
-    phone: "ስልክ",
+    phoneNumber: "ስልክ ቁጥር",
     gender: "ፆታ",
-    qualification: "ትምህርት ዝግጅት",
-    term: "የሥራ ጊዜ",
+    qualification: "ትምህርት",
     department: "ክፍል",
     address: "አድራሻ",
-    dob: "የልደት ቀን",
+    dateOfBirth: "የልደት ቀን",
     empId: "የሰራተኛ መለያ",
     salary: "ደሞዝ",
     experience: "ልምድ",
-    contactPerson: "የግንኙነት ሰው",
-    contactAddress: "የግንኙነት አድራሻ",
-    saveChanges: "ለውጦችን አስቀምጥ",
+    contactPerson: "የአደጋ አደጋ",
+    contactPersonAddress: "የመገናኛ ሰው አድራሻ",
+    saveChanges: "አስቀምጥ",
+    position: "ሥራ",
+    employeeStatus: "የሰራተኛ ሁኔታ",
+    firstName: "የመጀመሪያ ስም",
+    lastName: "የአባት ስም",
+    middleName: "የአያት ስም",
+    sex: "ፆታ",
+    typeOfPosition: "የስራ አይነት",
+    termOfEmployment: "የስራ ጊዜ",
+    maritalStatus: "የትዳር ሁኔታ",
+    photo: "ፎቶ",
+    personalInfo: "ግላዊ መረጃ",
+    employmentInfo: "የስራ መረጃ",
+    contactInfo: "የመገናኛ መረጃ",
+    fullName: "ሙሉ ስም",
   },
 };
 
 const DeptHeadEmployees = () => {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { darkMode, language } = useSettings();
   const t = translations[language];
 
   const [employees, setEmployees] = useState([]);
   const [deptName, setDeptName] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -112,7 +145,7 @@ const DeptHeadEmployees = () => {
     fetchDeptName();
   }, [user]);
 
-  // Fetch employees in department
+  // Fetch employees
   useEffect(() => {
     if (!user?.department) return;
 
@@ -125,54 +158,40 @@ const DeptHeadEmployees = () => {
         const employeesWithDetails = res.data.map((emp) => ({
           ...emp,
           departmentName: emp.department?.name || "N/A",
-          phone: emp.phone || emp.phoneNumber || "N/A",
+          phoneNumber: emp.phoneNumber || "N/A",
           photo: emp.photo
-  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
-  : '/fallback-avatar.png'
-
+            ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
+            : '/fallback-avatar.png'
         }));
         setEmployees(employeesWithDetails);
       } catch (err) {
-        console.error(err.response?.data || err);
-        setError(t.deleteFailed);
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchEmployees();
-  }, [user, language]);
+  }, [user]);
 
   // Search filter
   const filteredEmployees = employees.filter((emp) =>
     `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleChange = (e) =>
-    setEditData({ ...editData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value, type } = e.target;
+    setEditData({ 
+      ...editData, 
+      [name]: type === 'number' ? parseFloat(value) : value 
+    });
+  };
 
   const handleSave = async () => {
     try {
       await axiosInstance.put(`/employees/${selectedEmployee._id}`, editData);
-
-      // Refresh list
-      const res = await axiosInstance.get(
-        `/employees/department?department=${encodeURIComponent(user.department)}`
-      );
-
-      setEmployees(
-        res.data.map((emp) => ({
-          ...emp,
-          departmentName: emp.department?.name || "N/A",
-          phone: emp.phone || emp.phoneNumber || "N/A",
-          photo: emp.photo
-  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
-  : '/fallback-avatar.png'
-
-        }))
-      );
-
       closeModal();
+      window.location.reload();
     } catch (err) {
       console.error(err);
       alert(t.updateFailed);
@@ -197,25 +216,24 @@ const DeptHeadEmployees = () => {
     setIsEditing(edit);
     setEditData({
       firstName: emp.firstName || "",
+      middleName: emp.middleName || "",
       lastName: emp.lastName || "",
-      phone: emp.phone || "",
-      typeOfPosition: emp.typeOfPosition || "",
-      department: emp.departmentName || "",
-      address: emp.address || "",
       email: emp.email || "",
-      dateOfBirth: emp.dateOfBirth?.split("T")[0] || "",
       empId: emp.empId || "",
-      salary: emp.salary || "",
-      experience: emp.experience || "",
+      phoneNumber: emp.phoneNumber || "",
+      sex: emp.sex || "",
+      typeOfPosition: emp.typeOfPosition || "",
+      termOfEmployment: emp.termOfEmployment || "",
       contactPerson: emp.contactPerson || "",
       contactPersonAddress: emp.contactPersonAddress || "",
-      gender: emp.gender || "",
+      employeeStatus: emp.employeeStatus || "",
+      salary: emp.salary || "",
+      experience: emp.experience || "",
       qualification: emp.qualification || "",
-      termOfEmployment: emp.termOfEmployment || "",
-      photo: emp.photo
-  ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
-  : '/fallback-avatar.png'
-
+      dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : "",
+      address: emp.address || "",
+      maritalStatus: emp.maritalStatus || "",
+      department: emp.department || "",
     });
   };
 
@@ -225,77 +243,179 @@ const DeptHeadEmployees = () => {
     setEditData({});
   };
 
-  if (authLoading || loading)
-    return <div className="p-6 text-center">{t.loading}</div>;
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === "en" ? "en-US" : "am-ET", {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
 
-  if (!user || user.role.toLowerCase() !== "departmenthead")
-    return <div>{t.notAuthorized}</div>;
+  if (loading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${
+        darkMode ? "bg-gray-900" : "bg-gray-50"
+      }`}>
+        <div className="text-center">
+          <div className={`w-12 h-12 border-4 rounded-full animate-spin ${
+            darkMode ? "border-blue-500 border-t-transparent" : "border-blue-600 border-t-transparent"
+          }`}></div>
+          <p className={`mt-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
+            {t.loading}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || user.role.toLowerCase() !== "departmenthead") {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${
+        darkMode ? "bg-gray-900" : "bg-gray-50"
+      }`}>
+        <p className={darkMode ? "text-gray-300" : "text-gray-600"}>
+          {t.notAuthorized}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`p-6 min-h-screen transition-colors duration-700 ${
-        darkMode
-          ? "bg-gray-900 text-gray-100"
-          : "bg-gradient-to-b from-gray-100 to-gray-200 text-gray-800"
-      }`}
-    >
-      <h1 className="text-3xl font-bold mb-4">
-        {t.employeesIn} {deptName}
-      </h1>
-
-      <div className="mb-4 flex items-center gap-2 max-w-sm">
-        <FaSearch className="text-gray-500" />
-        <input
-          type="text"
-          placeholder={t.searchPlaceholder}
-          className="p-2 rounded border w-full"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+    <div className={`min-h-screen p-6 transition-colors ${
+      darkMode ? "bg-gray-900 text-gray-100" : "bg-gray-50 text-gray-900"
+    }`}>
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold mb-2">
+          {t.employeesIn} <span className="text-blue-600 dark:text-blue-400">{deptName}</span>
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          {employees.length} employees in your department
+        </p>
       </div>
 
-      {error && <p className="text-red-500 mb-4">{error}</p>}
+      {/* Search */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <FaSearch className="text-gray-400" />
+          </div>
+          <input
+            type="text"
+            placeholder={t.searchPlaceholder}
+            className={`w-full pl-10 pr-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              darkMode 
+                ? "bg-gray-800 border-gray-700 text-gray-100" 
+                : "bg-white border-gray-300 text-gray-900"
+            }`}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
 
+      {/* Employee Grid */}
       {filteredEmployees.length === 0 ? (
-        <p>{t.noEmployees}</p>
+        <div className={`text-center py-12 rounded-lg ${
+          darkMode ? "bg-gray-800/50" : "bg-white"
+        }`}>
+          <p className="text-gray-500 dark:text-gray-400">{t.noEmployees}</p>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredEmployees.map((emp) => (
             <div
               key={emp._id}
-              className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 flex flex-col items-center transition hover:scale-105 hover:shadow-2xl"
+              className={`rounded-xl border transition-all hover:shadow-lg ${
+                darkMode 
+                  ? "bg-gray-800 border-gray-700 hover:border-gray-600" 
+                  : "bg-white border-gray-200 hover:border-gray-300"
+              }`}
             >
-              <img
-  src={emp.photo || '/fallback-avatar.png'}
-  alt="Employee"
-  className="w-12 h-12 rounded-full object-cover"
-/>
+              <div className="p-5">
+                <div className="flex items-start gap-4 mb-4">
+                  <img
+                    src={emp.photo || '/fallback-avatar.png'}
+                    alt="Employee"
+                    className="w-12 h-12 rounded-full object-cover border-2 border-blue-500"
+                  />
+                  <div className="flex-1">
+                    <h3 className="font-bold text-lg">
+                      {emp.firstName} {emp.lastName}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      {emp.typeOfPosition || t.position}
+                    </p>
+                    <p className="text-gray-500 dark:text-gray-500 text-xs mt-1">
+                      {emp.empId}
+                    </p>
+                  </div>
+                  <div className={`px-2 py-1 rounded text-xs ${
+                    emp.employeeStatus?.toLowerCase() === "active"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400"
+                  }`}>
+                    {emp.employeeStatus || "Active"}
+                  </div>
+                </div>
 
-              <h2 className="text-xl font-semibold mb-1">
-                {emp.firstName} {emp.lastName}
-              </h2>
-              <p className="mb-2">{emp.typeOfPosition || "N/A"}</p>
-              <p className="text-sm mb-3">{emp.departmentName}</p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <FaEnvelope className="w-4 h-4 text-gray-400" />
+                    <span className="truncate">{emp.email}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FaPhone className="w-4 h-4 text-gray-400" />
+                    <span>{emp.phoneNumber}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FaBuilding className="w-4 h-4 text-gray-400" />
+                    <span>{emp.departmentName}</span>
+                  </div>
+                </div>
+              </div>
 
-              <div className="flex space-x-2">
-                <button
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded transition"
-                  onClick={() => openModal(emp, false)}
-                >
-                  {t.view}
-                </button>
-                <button
-                  className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded transition"
-                  onClick={() => openModal(emp, true)}
-                >
-                  {t.edit}
-                </button>
-                <button
-                  className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded transition"
-                  onClick={() => handleDelete(emp._id)}
-                >
-                  {t.delete}
-                </button>
+              <div className={`px-5 py-4 border-t ${
+                darkMode ? "border-gray-700" : "border-gray-200"
+              }`}>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openModal(emp, false)}
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-sm ${
+                      darkMode 
+                        ? "bg-gray-700 hover:bg-gray-600 text-gray-200" 
+                        : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+                    }`}
+                  >
+                    <FaEye className="w-4 h-4" />
+                    {t.view}
+                  </button>
+                  <button
+                    onClick={() => openModal(emp, true)}
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-sm ${
+                      darkMode 
+                        ? "bg-blue-900/30 hover:bg-blue-900/50 text-blue-400" 
+                        : "bg-blue-50 hover:bg-blue-100 text-blue-600"
+                    }`}
+                  >
+                    <FaEdit className="w-4 h-4" />
+                    {t.edit}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(emp._id)}
+                    className={`flex-1 py-2 rounded-lg flex items-center justify-center gap-2 text-sm ${
+                      darkMode 
+                        ? "bg-red-900/30 hover:bg-red-900/50 text-red-400" 
+                        : "bg-red-50 hover:bg-red-100 text-red-600"
+                    }`}
+                  >
+                    <FaTrash className="w-4 h-4" />
+                    {t.delete}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -304,111 +424,547 @@ const DeptHeadEmployees = () => {
 
       {/* Modal */}
       {selectedEmployee && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white dark:bg-gray-900 p-6 rounded-3xl w-full max-w-xl shadow-2xl relative overflow-y-auto max-h-[90vh]"
-          >
-            <button
-              className="absolute top-4 right-4 text-gray-700 dark:text-gray-200 text-2xl font-bold"
-              onClick={closeModal}
-            >
-              ×
-            </button>
-
-            <div className="flex flex-col items-center">
-              <img
-  src={selectedEmployee.photo || "/fallback-avatar.png"} 
-
-  alt="Employee"
-  className="w-12 h-12 rounded-full object-cover"
-/>
-
-              <h2 className="text-3xl font-bold text-indigo-600 mb-1">
-                {selectedEmployee.firstName} {selectedEmployee.lastName}
-              </h2>
-              <p className="mb-4">{selectedEmployee.typeOfPosition || "N/A"}</p>
-            </div>
-
-            {/* Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700 dark:text-gray-200 mb-4">
-              <p className="flex items-center gap-2">
-                <FaEnvelope /> {t.email}: {selectedEmployee.email || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaPhone /> {t.phone}: {selectedEmployee.phone || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaVenusMars /> {t.gender}: {selectedEmployee.gender || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaGraduationCap /> {t.qualification}:{" "}
-                {selectedEmployee.qualification || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaClock /> {t.term}: {selectedEmployee.termOfEmployment || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaBuilding /> {t.department}: {selectedEmployee.departmentName}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaMapMarkerAlt /> {t.address}: {selectedEmployee.address || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaBirthdayCake /> {t.dob}: {selectedEmployee.dateOfBirth || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaIdBadge /> {t.empId}: {selectedEmployee.empId || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaDollarSign /> {t.salary}: {selectedEmployee.salary || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaUsers /> {t.experience}: {selectedEmployee.experience || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaAddressBook /> {t.contactPerson}:{" "}
-                {selectedEmployee.contactPerson || "N/A"}
-              </p>
-              <p className="flex items-center gap-2">
-                <FaMapMarkerAlt /> {t.contactAddress}:{" "}
-                {selectedEmployee.contactPersonAddress || "N/A"}
-              </p>
-            </div>
-
-            {/* Editing area */}
-            {isEditing && (
-              <>
-                <div className="mt-4 space-y-2">
-                  {Object.keys(editData).map((key) => (
-                    <input
-                      key={key}
-                      type={key === "dateOfBirth" ? "date" : "text"}
-                      name={key}
-                      value={editData[key] || ""}
-                      onChange={handleChange}
-                      className="w-full border p-2 rounded"
-                      placeholder={key.replace(/([A-Z])/g, " $1")}
-                    />
-                  ))}
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`rounded-xl w-full max-w-5xl max-h-[90vh] overflow-y-auto ${
+            darkMode ? "bg-gray-800" : "bg-white"
+          }`}>
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h2 className="text-xl font-bold">
+                    {isEditing ? t.edit : t.view} Employee
+                  </h2>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {selectedEmployee.empId}
+                  </p>
                 </div>
-
                 <button
-                  className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded transition"
-                  onClick={handleSave}
+                  onClick={closeModal}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-2xl"
                 >
-                  {t.saveChanges}
+                  ✕
                 </button>
-              </>
-            )}
-          </motion.div>
+              </div>
+
+              {/* Employee Info */}
+              <div className="flex items-center gap-6 mb-8">
+                <img
+                  src={selectedEmployee.photo || "/fallback-avatar.png"}
+                  alt="Employee"
+                  className="w-24 h-24 rounded-full border-4 border-blue-500 object-cover"
+                />
+                <div>
+                  <h3 className="font-bold text-2xl">
+                    {selectedEmployee.firstName} {selectedEmployee.middleName} {selectedEmployee.lastName}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-lg">
+                    {selectedEmployee.typeOfPosition}
+                  </p>
+                  <div className={`inline-block mt-2 px-3 py-1 rounded-full text-sm ${
+                    selectedEmployee.employeeStatus?.toLowerCase() === "active"
+                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400"
+                  }`}>
+                    {selectedEmployee.employeeStatus || "Active"}
+                  </div>
+                </div>
+              </div>
+
+              {isEditing ? (
+                // EDIT FORM - ALL FIELDS (except password)
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Column 1 */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.firstName} *
+                      </label>
+                      <input
+                        type="text"
+                        name="firstName"
+                        value={editData.firstName || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.middleName}
+                      </label>
+                      <input
+                        type="text"
+                        name="middleName"
+                        value={editData.middleName || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.lastName} *
+                      </label>
+                      <input
+                        type="text"
+                        name="lastName"
+                        value={editData.lastName || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.email} *
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        value={editData.email || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.empId} *
+                      </label>
+                      <input
+                        type="text"
+                        name="empId"
+                        value={editData.empId || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.phoneNumber}
+                      </label>
+                      <input
+                        type="tel"
+                        name="phoneNumber"
+                        value={editData.phoneNumber || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Column 2 */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.sex} *
+                      </label>
+                      <select
+                        name="sex"
+                        value={editData.sex || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      >
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.typeOfPosition} *
+                      </label>
+                      <input
+                        type="text"
+                        name="typeOfPosition"
+                        value={editData.typeOfPosition || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.termOfEmployment} *
+                      </label>
+                      <input
+                        type="text"
+                        name="termOfEmployment"
+                        value={editData.termOfEmployment || ""}
+                        onChange={handleChange}
+                        required
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.salary}
+                      </label>
+                      <input
+                        type="number"
+                        name="salary"
+                        value={editData.salary || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.experience}
+                      </label>
+                      <input
+                        type="text"
+                        name="experience"
+                        value={editData.experience || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.qualification}
+                      </label>
+                      <input
+                        type="text"
+                        name="qualification"
+                        value={editData.qualification || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Column 3 */}
+                  <div className="space-y-4 md:col-span-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                          {t.dateOfBirth}
+                        </label>
+                        <input
+                          type="date"
+                          name="dateOfBirth"
+                          value={editData.dateOfBirth || ""}
+                          onChange={handleChange}
+                          className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? "bg-gray-700 border-gray-600 text-gray-100" 
+                              : "bg-white border-gray-300 text-gray-900"
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                          {t.maritalStatus}
+                        </label>
+                        <select
+                          name="maritalStatus"
+                          value={editData.maritalStatus || ""}
+                          onChange={handleChange}
+                          className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                            darkMode 
+                              ? "bg-gray-700 border-gray-600 text-gray-100" 
+                              : "bg-white border-gray-300 text-gray-900"
+                          }`}
+                        >
+                          <option value="">Select Status</option>
+                          <option value="Single">Single</option>
+                          <option value="Married">Married</option>
+                          <option value="Divorced">Divorced</option>
+                          <option value="Widowed">Widowed</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.address}
+                      </label>
+                      <input
+                        type="text"
+                        name="address"
+                        value={editData.address || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.contactPerson}
+                      </label>
+                      <input
+                        type="text"
+                        name="contactPerson"
+                        value={editData.contactPerson || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.contactPersonAddress}
+                      </label>
+                      <input
+                        type="text"
+                        name="contactPersonAddress"
+                        value={editData.contactPersonAddress || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
+                        {t.employeeStatus}
+                      </label>
+                      <select
+                        name="employeeStatus"
+                        value={editData.employeeStatus || ""}
+                        onChange={handleChange}
+                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-gray-100" 
+                            : "bg-white border-gray-300 text-gray-900"
+                        }`}
+                      >
+                        <option value="">Select Status</option>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                        <option value="On Leave">On Leave</option>
+                        <option value="Terminated">Terminated</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <button
+                      onClick={handleSave}
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                    >
+                      {t.saveChanges}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // VIEW DETAILS - ALL FIELDS (except password)
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Personal Information */}
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? "bg-gray-700/30" : "bg-gray-50"
+                  }`}>
+                    <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                      <FaUser className="text-blue-500" />
+                      {t.personalInfo}
+                    </h4>
+                    <div className="space-y-3">
+                      <DetailItem 
+                        icon={<FaUser />} 
+                        label={t.fullName} 
+                        value={`${selectedEmployee.firstName || ''} ${selectedEmployee.middleName || ''} ${selectedEmployee.lastName || ''}`.trim()} 
+                      />
+                      <DetailItem 
+                        icon={<FaIdBadge />} 
+                        label={t.empId} 
+                        value={selectedEmployee.empId} 
+                      />
+                      <DetailItem 
+                        icon={<FaBirthdayCake />} 
+                        label={t.dateOfBirth} 
+                        value={formatDate(selectedEmployee.dateOfBirth)} 
+                      />
+                      <DetailItem 
+                        icon={<FaVenusMars />} 
+                        label={t.sex} 
+                        value={selectedEmployee.sex} 
+                      />
+                      <DetailItem 
+                        icon={<FaRing />} 
+                        label={t.maritalStatus} 
+                        value={selectedEmployee.maritalStatus} 
+                      />
+                      <DetailItem 
+                        icon={<FaGraduationCap />} 
+                        label={t.qualification} 
+                        value={selectedEmployee.qualification} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Employment Information */}
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? "bg-gray-700/30" : "bg-gray-50"
+                  }`}>
+                    <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                      <FaUserTie className="text-green-500" />
+                      {t.employmentInfo}
+                    </h4>
+                    <div className="space-y-3">
+                      <DetailItem 
+                        icon={<FaBuilding />} 
+                        label={t.department} 
+                        value={selectedEmployee.departmentName} 
+                      />
+                      <DetailItem 
+                        icon={<FaUserTie />} 
+                        label={t.typeOfPosition} 
+                        value={selectedEmployee.typeOfPosition} 
+                      />
+                      <DetailItem 
+                        icon={<FaClock />} 
+                        label={t.termOfEmployment} 
+                        value={selectedEmployee.termOfEmployment} 
+                      />
+                      <DetailItem 
+                        icon={<FaDollarSign />} 
+                        label={t.salary} 
+                        value={selectedEmployee.salary} 
+                      />
+                      <DetailItem 
+                        icon={<FaUsers />} 
+                        label={t.experience} 
+                        value={selectedEmployee.experience} 
+                      />
+                      <DetailItem 
+                        icon={<FaFileContract />} 
+                        label={t.employeeStatus} 
+                        value={selectedEmployee.employeeStatus} 
+                      />
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div className={`p-4 rounded-lg md:col-span-2 ${
+                    darkMode ? "bg-gray-700/30" : "bg-gray-50"
+                  }`}>
+                    <h4 className="font-bold text-lg mb-4 flex items-center gap-2">
+                      <FaAddressCard className="text-purple-500" />
+                      {t.contactInfo}
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <DetailItem 
+                        icon={<FaEnvelope />} 
+                        label={t.email} 
+                        value={selectedEmployee.email} 
+                      />
+                      <DetailItem 
+                        icon={<FaPhone />} 
+                        label={t.phoneNumber} 
+                        value={selectedEmployee.phoneNumber} 
+                      />
+                      <DetailItem 
+                        icon={<FaMapMarkerAlt />} 
+                        label={t.address} 
+                        value={selectedEmployee.address} 
+                      />
+                      <DetailItem 
+                        icon={<FaHome />} 
+                        label={t.contactPerson} 
+                        value={selectedEmployee.contactPerson} 
+                      />
+                      <DetailItem 
+                        icon={<FaMapMarkerAlt />} 
+                        label={t.contactPersonAddress} 
+                        value={selectedEmployee.contactPersonAddress} 
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 };
+
+// Helper component for detail items
+const DetailItem = ({ icon, label, value }) => (
+  <div className="flex items-start gap-3">
+    {icon && <div className="text-gray-500 dark:text-gray-400 mt-1">{icon}</div>}
+    <div className="flex-1">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</p>
+      <p className="font-medium break-words">
+        {value || <span className="text-gray-400 italic">Not provided</span>}
+      </p>
+    </div>
+  </div>
+);
 
 export default DeptHeadEmployees;

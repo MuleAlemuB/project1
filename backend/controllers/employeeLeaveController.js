@@ -1,36 +1,35 @@
+// controllers/employeeLeaveController.js
 import asyncHandler from "express-async-handler";
 import LeaveRequest from "../models/LeaveRequest.js";
 import Notification from "../models/Notification.js";
+import Employee from "../models/Employee.js";
 
 // ---------------- Employee submits leave request ----------------
 export const createEmployeeLeaveRequest = asyncHandler(async (req, res) => {
   const employee = req.user;
 
+  // Handle attachments properly
+  let attachments = [];
+  if (req.files && req.files.length > 0) {
+    attachments = req.files.map(f => ({
+      name: f.originalname,
+      url: `${req.protocol}://${req.get("host")}/uploads/${f.filename}`
+    }));
+  }
+
   const leave = await LeaveRequest.create({
     requester: employee._id,
     requesterModel: "Employee",
-
-    // ✅ FIX: enum values must match schema
     requesterRole: "Employee",
     targetRole: "DepartmentHead",
-
-    // ✅ FIX: store department NAME only
-    department:
-      employee.department?.name ||
-      employee.department,
-
-    // ✅ FIX: real full name
+    department: employee.department?.name || employee.department,
     requesterName: `${employee.firstName} ${employee.lastName}`,
     requesterEmail: employee.email,
-
     startDate: req.body.startDate,
     endDate: req.body.endDate,
     reason: req.body.reason,
-
-    attachments: req.files?.map(f => ({
-  name: f.originalname, // human-readable name
-  url: `${req.protocol}://${req.get("host")}/uploads/${f.filename}` // full URL
-})) || [],
+    attachments: attachments, // Now matches the schema
+    status: "pending"
   });
 
   // ✅ Optional notification to Dept Head
@@ -47,18 +46,51 @@ export const createEmployeeLeaveRequest = asyncHandler(async (req, res) => {
     leave,
   });
 });
+
+// Get leave requests for logged-in employee
+export const getMyLeaveRequests = asyncHandler(async (req, res) => {
+  // FIX: Use correct field name - it's 'requester' not 'employee'
+  const leaves = await LeaveRequest.find({ 
+    requester: req.user._id,
+    requesterModel: "Employee"
+  }).sort({ createdAt: -1 });
+  
+  res.json(leaves);
+});
+
+// Delete a leave request by ID
+export const deleteLeaveRequest = asyncHandler(async (req, res) => {
+  const leave = await LeaveRequest.findById(req.params.id);
+
+  if (!leave) {
+    res.status(404);
+    throw new Error("Leave request not found");
+  }
+
+  // Only allow owner to delete
+  if (leave.requester.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorized to delete this leave request");
+  }
+
+  await leave.deleteOne();
+  res.json({ message: "Leave request deleted" });
+});
+
+// For Department Head - Get leave requests
 export const getDeptHeadLeaveRequests = asyncHandler(async (req, res) => {
-  const deptName =
-    req.user.department?.name || req.user.department;
+  const deptName = req.user.department?.name || req.user.department;
 
   const requests = await LeaveRequest.find({
     targetRole: "DepartmentHead",
     department: deptName,
+    status: "pending" // Usually dept head sees pending requests
   }).sort({ createdAt: -1 });
 
   res.json(requests);
 });
-// backend/controllers/employeeLeaveController.js
+
+// For Department Head - Update status
 export const updateEmployeeLeaveRequestStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body; // "approved" or "rejected"
@@ -81,27 +113,29 @@ export const updateEmployeeLeaveRequestStatus = asyncHandler(async (req, res) =>
     throw new Error("Cannot update another department request");
   }
 
+  // Validate status
+  if (!["approved", "rejected"].includes(status)) {
+    res.status(400);
+    throw new Error("Status must be either 'approved' or 'rejected'");
+  }
+
   leaveRequest.status = status;
   await leaveRequest.save();
 
   // ✅ Create notification for employee
-  // Notify employee after leave status update
-await Notification.create({
-  type: "Leave",
-  message: `Your leave request (${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()}) was ${status}`,
-  recipientRole: "Employee",
-  employee: {
-    _id: leaveRequest.requester,        // Employee MongoDB _id
-    email: leaveRequest.requesterEmail, // Employee email
-    name: leaveRequest.requesterName,   // Optional: full name
-  },
-  leaveRequestId: leaveRequest._id,
-  status,
-  seen: false,
-});
-
-
-  console.log("Notification created:", notif); // verify in server logs
+  await Notification.create({
+    type: "Leave",
+    message: `Your leave request (${leaveRequest.startDate.toDateString()} - ${leaveRequest.endDate.toDateString()}) was ${status}`,
+    recipientRole: "Employee",
+    employee: {
+      _id: leaveRequest.requester,
+      email: leaveRequest.requesterEmail,
+      name: leaveRequest.requesterName,
+    },
+    leaveRequestId: leaveRequest._id,
+    status,
+    seen: false,
+  });
 
   res.json({
     message: `Leave request ${status}`,
@@ -109,6 +143,7 @@ await Notification.create({
   });
 });
 
+// For Department Head - Delete request
 export const deleteEmployeeLeaveRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -117,8 +152,7 @@ export const deleteEmployeeLeaveRequest = asyncHandler(async (req, res) => {
     throw new Error("Not authorized");
   }
 
-  const deptName =
-    req.user.department?.name || req.user.department;
+  const deptName = req.user.department?.name || req.user.department;
 
   const leaveRequest = await LeaveRequest.findById(id);
   if (!leaveRequest) {
@@ -133,28 +167,4 @@ export const deleteEmployeeLeaveRequest = asyncHandler(async (req, res) => {
 
   await leaveRequest.deleteOne();
   res.json({ message: "Leave request deleted successfully" });
-});
-// Get leave requests for logged-in employee
-export const getMyLeaveRequests = asyncHandler(async (req, res) => {
-  const leaves = await LeaveRequest.find({ employee: req.user._id }).sort({ createdAt: -1 });
-  res.json(leaves);
-});
-
-// Delete a leave request by ID
-export const deleteLeaveRequest = asyncHandler(async (req, res) => {
-  const leave = await LeaveRequest.findById(req.params.id);
-
-  if (!leave) {
-    res.status(404);
-    throw new Error("Leave request not found");
-  }
-
-  // Only allow owner to delete
-  if (leave.employee.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error("Not authorized to delete this leave request");
-  }
-
-  await leave.remove();
-  res.json({ message: "Leave request deleted" });
 });

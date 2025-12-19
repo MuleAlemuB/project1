@@ -1,13 +1,13 @@
 // src/components/employee/EmployeeSidebar.jsx
 import React, { useState } from "react";
-import { FaUser, FaEnvelope, FaBell, FaTachometerAlt } from "react-icons/fa";
+import { FaUser, FaEnvelope, FaBell, FaTachometerAlt, FaFileAlt } from "react-icons/fa";
 import { Link, useLocation } from "react-router-dom";
 import { useSettings } from "../../contexts/SettingsContext";
 
 const EmployeeSidebar = () => {
   const location = useLocation();
   const [activeLink, setActiveLink] = useState(location.pathname);
-  const { language, darkMode } = useSettings(); // get language and darkMode
+  const { language, darkMode } = useSettings();
 
   const links = [
     {
@@ -26,13 +26,17 @@ const EmployeeSidebar = () => {
       icon: <FaBell />,
     },
     {
+      name: language === "am" ? "የስራ ልምድ ጥያቄ" : "Work Experience Request",
+      path: "/employee/work-experience",
+      icon: <FaFileAlt />,
+    },
+    {
       name: language === "am" ? "መግለጫ" : "Profile",
       path: "/employee/profile",
       icon: <FaUser />,
     },
   ];
 
-  // Dynamically set colors based on darkMode
   const sidebarBg = darkMode ? "bg-gray-900" : "bg-gray-100";
   const textColor = darkMode ? "text-gray-100" : "text-gray-800";
   const borderColor = darkMode ? "border-gray-700" : "border-gray-300";

@@ -15,6 +15,7 @@ import VacanciesHome from "./pages/VacanciesHome";
 import About from "./components/public/About";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+
 // Admin Pages
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ManageEmployees from "./pages/admin/ManageEmployees";
@@ -26,6 +27,8 @@ import AdminProfilePage from "./components/admin/ProfilePage";
 import EditEmployeeForm from "./pages/admin/EditEmployeeForm";
 import CreateEmployeeForm from "./pages/admin/CreateAccount";
 import ViewEmployee from "./pages/admin/ViewEmployee";
+import ManageWorkExperience from "./pages/admin/ManageWorkExperience";
+
 
 // Dept Head Pages
 import DeptHeadDashboard from "./pages/deptHead/DeptHeadDashboard";
@@ -35,12 +38,15 @@ import AttendancePage from "./pages/deptHead/DeptHeadAttendance";
 import RequisitionPage from "./pages/deptHead/DeptHeadRequisition";
 import LeaveRequestsPage from "./pages/deptHead/DeptHeadLeaveRequests";
 import NotificationsPage from "./pages/deptHead/DeptHeadNotifications";
+import DeptHeadWorkExperience from "./pages/deptHead/WorkExperienceRequest";
+
 
 // Employee Pages
 import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
 import EmployeeLeave from "./pages/employee/EmployeeLeave";
 import EmployeeNotifications from "./pages/employee/EmployeeNotifications";
 import EmployeeProfile from "./pages/employee/EmployeeProfile";
+import WorkExperienceRequest from "./pages/employee/WorkExperienceRequest";
 
 function App() {
   return (
@@ -54,7 +60,6 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
-
         {/* Admin Routes */}
         <Route path="/admin/*" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
@@ -62,12 +67,14 @@ function App() {
           <Route path="manage-employees" element={<ManageEmployees />} />
           <Route path="manage-departments" element={<ManageDepartments />} />
           <Route path="vacancies" element={<AdminVacancies />} />
+          
           <Route path="reports" element={<AdminReports />} />
           <Route path="notifications" element={<AdminNotifications />} />
           <Route path="profile" element={<AdminProfilePage />} />
           <Route path="edit-employee/:id" element={<EditEmployeeForm />} />
           <Route path="create-employee" element={<CreateEmployeeForm />} />
           <Route path="view-employee/:id" element={<ViewEmployee />} />
+          <Route path="work-experience" element={<ManageWorkExperience />} />
         </Route>
 
         {/* Dept Head Routes */}
@@ -78,25 +85,28 @@ function App() {
           <Route path="employees" element={<EmployeesPage />} />
           <Route path="attendance" element={<AttendancePage />} />
           <Route path="requisition" element={<RequisitionPage />} />
+          
           <Route path="leaverequests" element={<LeaveRequestsPage />} />
           <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="work-experience" element={<DeptHeadWorkExperience />} />
         </Route>
 
         {/* Employee Routes without sidebar */}
-<Route path="/employee">
-  <Route index element={<EmployeeDashboard />} />
-  <Route path="dashboard" element={<EmployeeDashboard />} />
-  <Route path="leave" element={<EmployeeLeave />} />
-  <Route path="profile" element={<EmployeeProfile />} />
-  <Route path="/employee/notifications" element={<EmployeeNotifications />} /> {/* New route */}
-</Route>
+        <Route path="/employee">
+          <Route index element={<EmployeeDashboard />} />
+          <Route path="dashboard" element={<EmployeeDashboard />} />
+          <Route path="leave" element={<EmployeeLeave />} />
+          <Route path="profile" element={<EmployeeProfile />} />
+          <Route path="/employee/notifications" element={<EmployeeNotifications />} />
+          <Route path="work-experience" element={<WorkExperienceRequest />} />
+        </Route>
 
         {/* Redirect unknown paths */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <ToastContainer 
         position="top-right"
-        autoClose={5000}  // 5 seconds
+        autoClose={5000}
         hideProgressBar={false}
         newestOnTop={false}
         closeOnClick

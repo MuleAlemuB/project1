@@ -14,6 +14,7 @@ import {
   ChevronRightIcon,
   PlusCircleIcon,
   DocumentChartBarIcon,
+  DocumentTextIcon, // Added for Work Experience
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -33,6 +34,7 @@ const translations = {
     manageEmployees: "Manage Employees",
     manageDepartments: "Manage Departments",
     vacancies: "Vacancies",
+    workExperience: "Work Experience", // Added
     reports: "Analytics",
     notifications: "Notifications",
     profile: "My Profile",
@@ -48,6 +50,7 @@ const translations = {
     manageEmployees: "ሰራተኞችን አስተዳደር",
     manageDepartments: "የክፍሎችን አስተዳደር",
     vacancies: "ቦታዎች",
+    workExperience: "የስራ ልምድ", // Added
     reports: "ትንታኔ",
     notifications: "ማሳወቂያዎች",
     profile: "ፕሮፋይሌ",
@@ -93,6 +96,12 @@ const AdminLayout = () => {
       to: "/admin/vacancies", 
       icon: <BriefcaseIcon className="h-5 w-5" />,
       activeIcon: <BriefcaseIconSolid className="h-5 w-5" />
+    },
+    { 
+      name: t.workExperience, // Added work experience menu item
+      to: "/admin/work-experience", 
+      icon: <DocumentTextIcon className="h-5 w-5" />,
+      activeIcon: <DocumentTextIcon className="h-5 w-5" /> // Using same icon for both states
     },
     { 
       name: t.reports, 

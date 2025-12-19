@@ -19,6 +19,8 @@ import adminNotificationRoute from './routes/adminNotificationRoute.js';
 import requisitionRoutes from "./routes/requisitionRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import attendanceRoutes from "./routes/attendanceRoutes.js";
+import workExperienceRoutes from "./routes/workExperienceRoutes.js";
+
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -69,6 +71,8 @@ app.use("/api/requisitions", requisitionRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use('/api/employee-leave', employeeLeaveRoutes);
+app.use("/api/work-experience", workExperienceRoutes);
+
 
 // Test route
 app.get('/', (req, res) => {

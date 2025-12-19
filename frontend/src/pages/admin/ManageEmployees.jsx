@@ -53,7 +53,6 @@ const ManageEmployee = () => {
     password: ""
   });
   const [usedEmpIds, setUsedEmpIds] = useState(new Set());
-  const [sessionPasswords, setSessionPasswords] = useState(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [successMessage, setSuccessMessage] = useState("");
@@ -111,30 +110,10 @@ const ManageEmployee = () => {
     }
   }, [token]);
 
-  // Generate 6-digit password (only check against session passwords)
+  // Generate 6-digit password
   const generateUniquePassword = () => {
-    let password;
-    let attempts = 0;
-    const maxAttempts = 100;
-    
-    do {
-      // Generate 6-digit password
-      password = Math.floor(100000 + Math.random() * 900000).toString();
-      attempts++;
-      
-      // If we can't find a unique password after many attempts, add timestamp
-      if (attempts >= maxAttempts) {
-        const timestamp = Date.now().toString().slice(-4);
-        password = Math.floor(10 + Math.random() * 90).toString() + timestamp;
-        while (password.length < 6) {
-          password = "0" + password;
-        }
-        password = password.slice(0, 6);
-      }
-    } while (sessionPasswords.has(password) && attempts < maxAttempts * 2);
-    
-    // Add to session passwords set (current session only)
-    setSessionPasswords(prev => new Set([...prev, password]));
+    // Simple 6-digit generation
+    const password = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedCredentials(prev => ({ ...prev, password }));
     return password;
   };
@@ -162,15 +141,6 @@ const ManageEmployee = () => {
     setUsedEmpIds(prev => new Set([...prev, empId]));
     setGeneratedCredentials(prev => ({ ...prev, empId }));
     return empId;
-  };
-
-  // Generate credentials for editing form too
-  const generateCredentialsForEdit = () => {
-    const newEmpId = generateUniqueEmpId();
-    const newPassword = generateUniquePassword();
-    setFormData(prev => ({ ...prev, empId: newEmpId }));
-    setSuccessMessage(`New credentials generated! ID: ${newEmpId}, Password: ${newPassword}`);
-    setTimeout(() => setSuccessMessage(""), 5000);
   };
 
   // Validate if Employee ID is unique
@@ -280,12 +250,6 @@ const ManageEmployee = () => {
       setIsLoading(false);
       return alert("Password must be exactly 6 digits.");
     }
-    
-    // Check against session passwords only (passwords generated in current session)
-    if (!editingId && sessionPasswords.has(formData.password)) {
-      setIsLoading(false);
-      return alert("This password was recently generated. Please generate a new one or use a different password.");
-    }
 
     // Check if Employee ID is unique
     if (!isEmpIdUnique(formData.empId)) {
@@ -304,9 +268,6 @@ const ManageEmployee = () => {
       if (!submitData.password || !isValidPassword(submitData.password)) {
         submitData.password = generateUniquePassword();
       }
-      
-      // Add to session passwords
-      setSessionPasswords(prev => new Set([...prev, submitData.password]));
     }
 
     try {
@@ -404,9 +365,6 @@ const ManageEmployee = () => {
         { newPassword }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      // Add to session passwords
-      setSessionPasswords(prev => new Set([...prev, newPassword]));
       
       setSuccessMessage(`Password reset successfully! New password: ${newPassword}`);
       setTimeout(() => setSuccessMessage(""), 5000);
