@@ -52,6 +52,8 @@ const translations = {
     totalApplications: "Total Applications",
     activeVacancies: "Active Vacancies",
     today: "Today",
+    jobTitle: "Job Title",
+    edit: "Edit",
     validation: {
       titleRequired: "Job title is required",
       departmentRequired: "Department is required",
@@ -113,6 +115,8 @@ const translations = {
     totalApplications: "አጠቃላይ ማመልከቻዎች",
     activeVacancies: "ንቁ ስራ ቦታዎች",
     today: "ዛሬ",
+    jobTitle: "የስራ ርዕስ",
+    edit: "አስተካክል",
     validation: {
       titleRequired: "የስራ ርዕስ ያስፈልጋል",
       departmentRequired: "ክፍል ያስፈልጋል",
@@ -368,102 +372,6 @@ const AdminVacancies = () => {
       setAppToDelete(null);
     }
   };
-
-  // In your AdminVacancies.jsx file, update the handleDownload function:
-
-const handleDownload = async (filename) => {
-  try {
-    console.log('Downloading file:', filename);
-    
-    // Get the base URL from axios instance
-    const baseUrl = axiosInstance.defaults.baseURL;
-    console.log('Base URL from axios:', baseUrl);
-    
-    // If baseUrl already ends with /api, don't add it again
-    let downloadUrl;
-    if (baseUrl && baseUrl.endsWith('/api')) {
-      // Remove /api from baseUrl and reconstruct
-      const cleanBaseUrl = baseUrl.replace(/\/api$/, '');
-      downloadUrl = `${cleanBaseUrl}/api/files/download/${filename}`;
-    } else {
-      // Use the baseUrl as is
-      downloadUrl = `${baseUrl}/files/download/${filename}`;
-    }
-    
-    console.log('Constructed download URL:', downloadUrl);
-    
-    // Alternative: Construct URL based on current location
-    const currentOrigin = window.location.origin; // http://localhost:3000
-    const apiUrl = `${currentOrigin}/api/files/download/${filename}`;
-    console.log('Alternative URL:', apiUrl);
-    
-    // Try different methods
-    
-    // Method 1: Direct anchor tag download (for same-origin)
-    try {
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      link.target = '_blank'; // Open in new tab
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      console.log('Direct download initiated');
-      return;
-    } catch (directError) {
-      console.log('Direct method failed, trying fetch:', directError);
-    }
-    
-    // Method 2: Fetch with authorization
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(downloadUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-      
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      }, 100);
-      
-    } catch (fetchError) {
-      console.error('Fetch method failed:', fetchError);
-      
-      // Method 3: Last resort - window.open
-      window.open(downloadUrl, '_blank');
-    }
-    
-    setNotification({
-      type: 'success',
-      message: 'Download started'
-    });
-    
-  } catch (error) {
-    console.error('Download error:', error);
-    setNotification({
-      type: 'error',
-      message: `Failed to download: ${error.message}`
-    });
-  }
-};
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -888,14 +796,14 @@ const handleDownload = async (filename) => {
                           <td className="p-4">{app.phone}</td>
                           <td className="p-4">
                             {app.resume ? (
-                              <motion.button
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => handleDownload(app.resume)}
+                              <a
+                                href={`http://localhost:5000/uploads/${app.resume}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 flex items-center gap-1 transition-colors duration-300"
                               >
                                 <FaFileDownload /> {t.download}
-                              </motion.button>
+                              </a>
                             ) : (
                               <span className="text-gray-500">N/A</span>
                             )}

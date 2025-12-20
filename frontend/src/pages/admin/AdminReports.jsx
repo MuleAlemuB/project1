@@ -191,20 +191,27 @@ const AdminReports = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // Get employee photo URL - fixed version
+  // Get employee photo URL - FIXED VERSION
   const getEmployeePhotoUrl = (photoPath) => {
     if (!photoPath) return null;
-    
-    // Remove leading slash if present
-    const cleanPath = photoPath.startsWith('/') ? photoPath.substring(1) : photoPath;
     
     // Check if it's already a full URL
     if (photoPath.startsWith('http://') || photoPath.startsWith('https://')) {
       return photoPath;
     }
     
-    // For Vite development - use relative path
-    return `/api/${cleanPath}`;
+    // If it's a relative path, check if it starts with uploads/
+    if (photoPath.startsWith('uploads/')) {
+      // Direct URL to your uploads folder
+      return `http://localhost:5000/${photoPath}`;
+    }
+    
+    // If it's just a filename
+    if (photoPath.includes('.')) {
+      return `http://localhost:5000/uploads/${photoPath}`;
+    }
+    
+    return null;
   };
 
   // Fetch report & summary
@@ -353,66 +360,167 @@ const AdminReports = () => {
 
   const sortedReport = getSortedData();
 
-  // Export functions
+  // Export functions - IMPROVED VERSION
   const exportPDF = () => {
     try {
-      const doc = new jsPDF("l", "pt", "a4");
+      const doc = new jsPDF("l", "pt", "a3"); // Using A3 for more space
       
-      // Header
-      doc.setFontSize(20);
+      // Title
+      doc.setFontSize(24);
       doc.setTextColor(44, 62, 80);
       doc.text("DTU HRMS - Complete Employee Report", 40, 40);
       
       doc.setFontSize(12);
       doc.setTextColor(128, 128, 128);
-      doc.text(`Generated: ${new Date().toLocaleDateString()}`, 40, 65);
+      doc.text(`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`, 40, 65);
       doc.text(`Total Employees: ${summary.totalEmployees}`, 40, 85);
       
-      // Main table - simplified columns for PDF
-      const tableColumn = [
-        t.photo, t.empId, t.firstName, t.lastName, t.email,
-        t.department, t.position, t.status,
-        t.salary, t.phone, t.dob
+      // Summary Statistics
+      doc.setFontSize(14);
+      doc.setTextColor(75, 85, 99);
+      doc.text("Summary Statistics:", 40, 115);
+      
+      doc.setFontSize(10);
+      doc.text(`• Total Employees: ${summary.totalEmployees}`, 60, 140);
+      doc.text(`• Active Employees: ${summary.activeEmployees || 0}`, 60, 160);
+      doc.text(`• Average Salary: $${summary.averageSalary?.toLocaleString() || '0'}`, 60, 180);
+      doc.text(`• Total Absent Days: ${summary.totalAbsent || 0}`, 60, 200);
+      doc.text(`• Total Leave Requests: ${summary.totalLeave || 0}`, 60, 220);
+      doc.text(`• Active Vacancies: ${summary.totalVacancy || 0}`, 60, 240);
+      
+      // Prepare table data based on visible columns
+      const tableColumns = [];
+      const columnHeaders = [];
+      
+      // Define all possible columns with their export labels
+      const columnDefinitions = [
+        { key: 'photo', label: t.photo },
+        { key: 'firstName', label: t.firstName },
+        { key: 'lastName', label: t.lastName },
+        { key: 'email', label: t.email },
+        { key: 'empId', label: t.empId },
+        { key: 'department', label: t.department },
+        { key: 'position', label: t.position },
+        { key: 'status', label: t.status },
+        { key: 'salary', label: t.salary },
+        { key: 'phone', label: t.phone },
+        { key: 'address', label: t.address },
+        { key: 'dob', label: t.dob },
+        { key: 'sex', label: t.sex },
+        { key: 'maritalStatus', label: t.maritalStatus },
+        { key: 'qualification', label: t.qualification },
+        { key: 'experience', label: t.experience },
+        { key: 'term', label: t.term },
+        { key: 'absentDays', label: t.absentDays },
+        { key: 'leaveRequests', label: t.leaveRequests },
+        { key: 'contactPerson', label: t.contactPerson },
+        { key: 'contactAddress', label: t.contactAddress }
       ];
       
-      const tableRows = sortedReport.map(emp => [
-        '📷',
-        emp.empId || '-',
-        emp.firstName || '-',
-        emp.lastName || '-',
-        emp.email || '-',
-        typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-',
-        emp.typeOfPosition || '-',
-        emp.employeeStatus || '-',
-        emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-',
-        emp.phoneNumber || '-',
-        emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-'
-      ]);
-      
-      autoTable(doc, {
-        startY: 100,
-        head: [tableColumn],
-        body: tableRows,
-        theme: 'striped',
-        headStyles: { fillColor: [75, 85, 99] },
-        styles: { fontSize: 8, cellPadding: 2 },
-        columnStyles: {
-          0: { cellWidth: 20 },
-          8: { halign: 'right' }
-        },
-        margin: { left: 40, right: 40 }
+      // Add visible columns
+      columnDefinitions.forEach(col => {
+        if (visibleColumns[col.key]) {
+          tableColumns.push(col.key);
+          columnHeaders.push(col.label);
+        }
       });
       
-      // Footer
-      const pageCount = doc.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(10);
-        doc.setTextColor(128, 128, 128);
-        doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.width - 100, doc.internal.pageSize.height - 20);
-        doc.text("DTU HRMS - Confidential", 40, doc.internal.pageSize.height - 20);
-      }
+      // Prepare table rows
+      const tableRows = sortedReport.map(emp => {
+        const row = [];
+        tableColumns.forEach(col => {
+          switch(col) {
+            case 'photo':
+              row.push('📷');
+              break;
+            case 'department':
+              row.push(typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-');
+              break;
+            case 'position':
+              row.push(emp.typeOfPosition || '-');
+              break;
+            case 'status':
+              row.push(emp.employeeStatus || '-');
+              break;
+            case 'salary':
+              row.push(emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-');
+              break;
+            case 'dob':
+              row.push(emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-');
+              break;
+            case 'address':
+              row.push(emp.address || '-');
+              break;
+            case 'contactPerson':
+              row.push(emp.contactPerson || '-');
+              break;
+            case 'contactAddress':
+              row.push(emp.contactPersonAddress || '-');
+              break;
+            case 'absentDays':
+              row.push(emp.absentDays || 0);
+              break;
+            case 'leaveRequests':
+              row.push(emp.leaveRequests || 0);
+              break;
+            case 'sex':
+              row.push(emp.sex || '-');
+              break;
+            case 'maritalStatus':
+              row.push(emp.maritalStatus || '-');
+              break;
+            case 'qualification':
+              row.push(emp.qualification || '-');
+              break;
+            case 'experience':
+              row.push(emp.experience || '-');
+              break;
+            case 'term':
+              row.push(emp.termOfEmployment || '-');
+              break;
+            default:
+              row.push(emp[col] || '-');
+          }
+        });
+        return row;
+      });
       
+      // Create table starting after summary
+      autoTable(doc, {
+        startY: 260,
+        head: [columnHeaders],
+        body: tableRows,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: [75, 85, 99],
+          textColor: 255,
+          fontStyle: 'bold'
+        },
+        styles: { 
+          fontSize: 8, 
+          cellPadding: 3,
+          overflow: 'linebreak'
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // Photo column
+          1: { cellWidth: 60 }, // First Name
+          2: { cellWidth: 60 }, // Last Name
+          3: { cellWidth: 100 }, // Email
+          4: { cellWidth: 60 }, // Emp ID
+          // Adjust other columns as needed
+        },
+        margin: { left: 40, right: 40 },
+        didDrawPage: function (data) {
+          // Footer
+          const pageCount = doc.getNumberOfPages();
+          doc.setFontSize(8);
+          doc.setTextColor(128, 128, 128);
+          doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 20);
+          doc.text("DTU HRMS - Confidential Employee Data", doc.internal.pageSize.width - 200, doc.internal.pageSize.height - 20);
+        }
+      });
+      
+      // Save the PDF
       doc.save(`employee_complete_report_${new Date().toISOString().split('T')[0]}.pdf`);
       showNotification('success', t.exportSuccess);
     } catch (error) {
@@ -423,64 +531,93 @@ const AdminReports = () => {
 
   const exportExcel = () => {
     try {
-      // Prepare data with all columns
-      const excelData = sortedReport.map(emp => ({
-        [t.photo]: '📷',
-        [t.empId]: emp.empId || '-',
-        [t.firstName]: emp.firstName || '-',
-        [t.middleName]: emp.middleName || '-',
-        [t.lastName]: emp.lastName || '-',
-        [t.email]: emp.email || '-',
-        [t.phone]: emp.phoneNumber || '-',
-        [t.dob]: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-',
-        [t.sex]: emp.sex || '-',
-        [t.maritalStatus]: emp.maritalStatus || '-',
-        [t.department]: typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-',
-        [t.position]: emp.typeOfPosition || '-',
-        [t.term]: emp.termOfEmployment || '-',
-        [t.status]: emp.employeeStatus || '-',
-        [t.salary]: emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-',
-        [t.experience]: emp.experience || '-',
-        [t.qualification]: emp.qualification || '-',
-        [t.address]: emp.address || '-',
-        [t.contactPerson]: emp.contactPerson || '-',
-        [t.contactAddress]: emp.contactPersonAddress || '-',
-        [t.absentDays]: emp.absentDays || 0,
-        [t.leaveRequests]: emp.leaveRequests || 0
-      }));
+      // Prepare main employee data
+      const excelData = sortedReport.map(emp => {
+        const row = {};
+        
+        // Add all visible columns
+        if (visibleColumns.photo) row[t.photo] = '📷';
+        if (visibleColumns.firstName) row[t.firstName] = emp.firstName || '-';
+        if (visibleColumns.lastName) row[t.lastName] = emp.lastName || '-';
+        if (visibleColumns.email) row[t.email] = emp.email || '-';
+        if (visibleColumns.empId) row[t.empId] = emp.empId || '-';
+        if (visibleColumns.department) row[t.department] = typeof emp.department === "object" ? emp.department?.name || '-' : emp.department || '-';
+        if (visibleColumns.position) row[t.position] = emp.typeOfPosition || '-';
+        if (visibleColumns.status) row[t.status] = emp.employeeStatus || '-';
+        if (visibleColumns.salary) row[t.salary] = emp.salary ? `$${parseFloat(emp.salary).toLocaleString()}` : '-';
+        if (visibleColumns.phone) row[t.phone] = emp.phoneNumber || '-';
+        if (visibleColumns.address) row[t.address] = emp.address || '-';
+        if (visibleColumns.dob) row[t.dob] = emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '-';
+        if (visibleColumns.sex) row[t.sex] = emp.sex || '-';
+        if (visibleColumns.maritalStatus) row[t.maritalStatus] = emp.maritalStatus || '-';
+        if (visibleColumns.qualification) row[t.qualification] = emp.qualification || '-';
+        if (visibleColumns.experience) row[t.experience] = emp.experience || '-';
+        if (visibleColumns.term) row[t.term] = emp.termOfEmployment || '-';
+        if (visibleColumns.absentDays) row[t.absentDays] = emp.absentDays || 0;
+        if (visibleColumns.leaveRequests) row[t.leaveRequests] = emp.leaveRequests || 0;
+        if (visibleColumns.contactPerson) row[t.contactPerson] = emp.contactPerson || '-';
+        if (visibleColumns.contactAddress) row[t.contactAddress] = emp.contactPersonAddress || '-';
+        
+        return row;
+      });
       
       // Create workbook
       const wb = XLSX.utils.book_new();
-      const ws = XLSX.utils.json_to_sheet(excelData);
       
-      // Add summary sheet
-      const summarySheet = XLSX.utils.aoa_to_sheet([
+      // Create Summary Sheet
+      const summaryData = [
         ["DTU HRMS - Complete Employee Report"],
-        [`Generated: ${new Date().toLocaleDateString()}`],
-        [],
+        [`Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`],
+        [""],
         ["HR Statistics Summary"],
-        [],
+        [""],
         ["Metric", "Value"],
         [t.totalEmployees, summary.totalEmployees],
+        ["Active Employees", summary.activeEmployees || 0],
+        ["Inactive Employees", (summary.totalEmployees - (summary.activeEmployees || 0))],
+        ["Average Salary", summary.averageSalary ? `$${summary.averageSalary.toLocaleString()}` : '-'],
         [t.totalAbsent, summary.totalAbsent],
         [t.totalLeave, summary.totalLeave],
         [t.totalVacancy, summary.totalVacancy],
         [t.totalRequisition, summary.totalRequisition],
         [t.totalLeft, summary.totalLeft],
-        ["Active Employees", summary.activeEmployees || 0],
-        ["Average Salary", summary.averageSalary ? `$${summary.averageSalary.toLocaleString()}` : '-']
-      ]);
+        [""],
+        ["Report Filters"],
+        ["Search Term", searchTerm || 'None'],
+        ["Status Filter", statusFilter !== 'all' ? statusFilter : 'All'],
+        ["Sort By", sortConfig.key ? t[sortConfig.key] || sortConfig.key : 'None'],
+        ["Sort Direction", sortConfig.direction === 'ascending' ? 'Ascending' : 'Descending']
+      ];
       
-      XLSX.utils.book_append_sheet(wb, summarySheet, "Summary");
-      XLSX.utils.book_append_sheet(wb, ws, "Employees");
+      const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
       
-      // Auto-size columns
+      // Create Employee Data Sheet
+      const employeeSheet = XLSX.utils.json_to_sheet(excelData);
+      
+      // Add sheets to workbook
+      XLSX.utils.book_append_sheet(wb, summarySheet, "Report Summary");
+      XLSX.utils.book_append_sheet(wb, employeeSheet, "Employee Data");
+      
+      // Auto-size columns for employee sheet
       const wscols = [];
-      for (let i = 0; i < excelData.length; i++) {
-        const maxLength = Math.max(...excelData.map(row => String(row[Object.keys(row)[i]]).length));
-        wscols.push({ wch: Math.min(maxLength + 5, 30) });
+      const maxCols = Object.keys(excelData[0] || {}).length;
+      
+      for (let i = 0; i < maxCols; i++) {
+        const colData = excelData.map(row => {
+          const key = Object.keys(row)[i];
+          return row[key] ? String(row[key]) : '';
+        });
+        const maxLength = Math.max(...colData.map(cell => cell.length));
+        wscols.push({ wch: Math.min(Math.max(maxLength, 10), 50) });
       }
-      ws['!cols'] = wscols;
+      employeeSheet['!cols'] = wscols;
+      
+      // Auto-size columns for summary sheet
+      const summaryCols = [
+        { wch: 30 },
+        { wch: 30 }
+      ];
+      summarySheet['!cols'] = summaryCols;
       
       // Save file
       XLSX.writeFile(wb, `hrms_complete_report_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -1065,6 +1202,7 @@ const AdminReports = () => {
                                 e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'%3E%3C/path%3E%3Ccircle cx='12' cy='7' r='4'%3E%3C/circle%3E%3C/svg%3E";
                                 e.target.className = "w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 p-2";
                               }}
+                              onLoad={() => console.log('Photo loaded:', photoUrl)}
                             />
                           ) : (
                             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-200 to-blue-200 dark:from-purple-700 dark:to-blue-700 flex items-center justify-center shadow-sm">
@@ -1291,7 +1429,7 @@ const AdminReports = () => {
                   <FaFilePdf className="text-xl" />
                   <div className="text-left">
                     <div className="font-bold">{t.downloadPDF}</div>
-                    <div className="text-sm opacity-90">Download as PDF file</div>
+                    <div className="text-sm opacity-90">Includes all employee data & statistics</div>
                   </div>
                 </motion.button>
                 
@@ -1304,7 +1442,7 @@ const AdminReports = () => {
                   <FaFileExcel className="text-xl" />
                   <div className="text-left">
                     <div className="font-bold">{t.downloadExcel}</div>
-                    <div className="text-sm opacity-90">Download as Excel file</div>
+                    <div className="text-sm opacity-90">Export all data to Excel spreadsheet</div>
                   </div>
                 </motion.button>
               </div>

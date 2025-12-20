@@ -1,16 +1,47 @@
 import express from "express";
-import { getDeptHeadProfile, updateDeptHeadProfile, updateDeptHeadPassword } from "../controllers/deptHeadController.js";
-import { protect, deptHead } from "../middlewares/authMiddleware.js";
+import {
+  getDeptHeadProfile,
+  updateDeptHeadProfile,
+  updateDeptHeadPassword,
+  getDeptEmployees,
+  getDeptPendingLeaves,
+  getDeptNotifications,
+  updateLeaveStatus,
+  getDeptStats,
+  getEmployeeDetails,
+  markNotificationRead
+} from "../controllers/deptheadController.js";
+import { protect, authorize } from "../middlewares/authMiddleware.js";
+import upload from "../middlewares/uploadPublicFiles.js";
 
 const router = express.Router();
 
-// Get DeptHead profile
-router.get("/profile", protect, deptHead, getDeptHeadProfile);
+// Protect all routes - require authentication
+router.use(protect);
 
-// Update DeptHead profile
-router.put("/profile", protect, deptHead, updateDeptHeadProfile);
+// Restrict to department head role only
+router.use(authorize("departmenthead"));
 
-// Update DeptHead password
-router.put("/update-password", protect, deptHead, updateDeptHeadPassword);
+// ================================
+// PROFILE ROUTES
+// ================================
+router.get("/profile", getDeptHeadProfile);
+router.put("/profile", upload.single("photo"), updateDeptHeadProfile);
+router.put("/password", updateDeptHeadPassword);
+
+// ================================
+// DASHBOARD DATA ROUTES
+// ================================
+router.get("/stats", getDeptStats); // Single call for all dashboard stats
+router.get("/employees", getDeptEmployees);
+router.get("/employees/:employeeId", getEmployeeDetails);
+router.get("/pending-leaves", getDeptPendingLeaves);
+router.get("/notifications", getDeptNotifications);
+router.put("/notifications/:notificationId/read", markNotificationRead);
+
+// ================================
+// LEAVE MANAGEMENT ROUTES
+// ================================
+router.put("/leaves/:leaveId/status", updateLeaveStatus);
 
 export default router;
