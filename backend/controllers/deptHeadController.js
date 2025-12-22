@@ -119,20 +119,20 @@ export const getDeptNotifications = asyncHandler(async (req, res) => {
 // ================================
 // 5. GET Department Statistics (Single Call)
 // ================================
+// ================================
+// GET Department Statistics (Fixed)
+// ================================
 export const getDeptStats = asyncHandler(async (req, res) => {
-  // Get department head's department
-  const deptHead = await Employee.findById(req.user._id)
-    .populate("department", "_id name");
+  const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
 
   if (!deptHead.department) {
     return res.status(400).json({ message: "Department not assigned" });
   }
 
-  const deptName = deptHead.department.name;
+  const deptId = deptHead.department._id;
 
-  // 1. Count total employees in department
   const totalEmployees = await Employee.countDocuments({
-    "department.name": deptName,
+    department: deptId,
     $or: [
       { employeeStatus: "Active" },
       { employeeStatus: { $exists: false } },
@@ -140,18 +140,16 @@ export const getDeptStats = asyncHandler(async (req, res) => {
     ]
   });
 
-  // 2. Count pending leave requests
   const pendingLeaves = await LeaveRequest.countDocuments({
-    department: deptName,
+    department: deptId,
     targetRole: "DepartmentHead",
     status: "pending"
   });
 
-  // 3. Count unread notifications
   const notifications = await Notification.countDocuments({
     $or: [
-      { recipient: req.user._id, seen: false },
-      { recipientRole: "departmenthead", seen: false }
+      { recipient: req.user._id, seen: { $ne: true } },
+      { recipientRole: "departmenthead", seen: { $ne: true } }
     ]
   });
 
@@ -159,7 +157,7 @@ export const getDeptStats = asyncHandler(async (req, res) => {
     totalEmployees,
     pendingLeaves,
     notifications,
-    department: deptName
+    department: deptHead.department.name
   });
 });
 

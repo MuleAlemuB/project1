@@ -1,50 +1,30 @@
 // backend/routes/workExperienceRoutes.js
 import express from "express";
+import { protect } from "../middlewares/authMiddleware.js";
+import uploadWorkExperience from "../middlewares/uploadWorkExperience.js";
 import {
-  createRequest,
-  getAdminRequests,
-  getMyRequests,
-  approveRequest,
+  submitRequest,
+  getAllRequests,
   rejectRequest,
-  getDepartmentRequests,
-  deleteRequest,
-  downloadLetter
+  approveWithUpload,
+  approveWithGeneratedLetter,
 } from "../controllers/workExperienceController.js";
-import { protect, admin, deptHead } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Public routes (authenticated users only)
-router.route("/")
-  .post(protect, createRequest)
-  .get(protect, getMyRequests);
+// Submit request (Employee/DeptHead) with optional file
+router.post("/", protect, uploadWorkExperience.single("requestAttachment"), submitRequest);
 
-// Download route
-router.route("/download/:id")
-  .get(protect, downloadLetter);
+// Admin: Get all requests
+router.get("/", protect, getAllRequests);
 
-// Admin routes
-router.route("/admin")
-  .get(protect, admin, getAdminRequests);
+// Admin: Reject request
+router.put("/:id/reject", protect, rejectRequest);
 
-router.route("/approve/:id")
-  .put(protect, admin, approveRequest);
+// Admin: Approve with uploaded letter
+router.put("/:id/approve/upload", protect, uploadWorkExperience.single("letterFile"), approveWithUpload);
 
-router.route("/reject/:id")
-  .put(protect, admin, rejectRequest);
-
-// Department head routes
-router.route("/department")
-  .get(protect, deptHead, getDepartmentRequests);
-
-router.route("/department/approve/:id")
-  .put(protect, deptHead, approveRequest);
-
-router.route("/department/reject/:id")
-  .put(protect, deptHead, rejectRequest);
-
-// Delete route (for employees and admin)
-router.route("/:id")
-  .delete(protect, deleteRequest);
+// Admin: Approve with generated letter link
+router.put("/:id/approve/generate", protect, approveWithGeneratedLetter);
 
 export default router;

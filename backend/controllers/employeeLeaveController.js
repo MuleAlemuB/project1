@@ -77,7 +77,7 @@ export const deleteLeaveRequest = asyncHandler(async (req, res) => {
   res.json({ message: "Leave request deleted" });
 });
 
-// For Department Head - Get leave requests
+// For Department Head - Get leave requests (pending ones)
 export const getDeptHeadLeaveRequests = asyncHandler(async (req, res) => {
   const deptName = req.user.department?.name || req.user.department;
 
@@ -86,6 +86,19 @@ export const getDeptHeadLeaveRequests = asyncHandler(async (req, res) => {
     department: deptName,
     status: "pending" // Usually dept head sees pending requests
   }).sort({ createdAt: -1 });
+
+  res.json(requests);
+});
+
+// NEW ENDPOINT: For Department Head - Get previous/decided leave requests
+export const getPreviousLeaveRequests = asyncHandler(async (req, res) => {
+  const deptName = req.user.department?.name || req.user.department;
+
+  const requests = await LeaveRequest.find({
+    targetRole: "DepartmentHead",
+    department: deptName,
+    status: { $in: ["approved", "rejected"] } // Only approved or rejected
+  }).sort({ updatedAt: -1 }); // Sort by decision date (updatedAt)
 
   res.json(requests);
 });
@@ -120,6 +133,7 @@ export const updateEmployeeLeaveRequestStatus = asyncHandler(async (req, res) =>
   }
 
   leaveRequest.status = status;
+  leaveRequest.approvedBy = `${req.user.firstName} ${req.user.lastName}`;
   await leaveRequest.save();
 
   // ✅ Create notification for employee

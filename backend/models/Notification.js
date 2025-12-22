@@ -12,6 +12,7 @@ const notificationSchema = new mongoose.Schema(
         "Vacancy Application",
         "Leave",
         "EmployeeLeaveApplied",
+        "Work Experience Request", // added to fix validation error
       ],
       required: true,
     },

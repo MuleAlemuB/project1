@@ -1,55 +1,63 @@
-// backend/models/WorkExperienceRequest.js
 import mongoose from "mongoose";
 
 const WorkExperienceRequestSchema = new mongoose.Schema(
   {
     employee: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "employee",
+      ref: "User",
       required: true,
     },
-    requestedByRole: {
+
+    roleSubmitted: {
       type: String,
-      enum: ["Employee", "DepartmentHead", "Admin"], // Added Admin and corrected case
+      enum: ["Employee", "DepartmentHead"],
       required: true,
     },
+
     department: {
       type: String,
       required: true,
     },
-    yearsOfService: {
-      type: Number,
+
+    reason: {
+      type: String,
       required: true,
-      min: 1, // Minimum 1 year
-      max: 50, // Maximum 50 years (reasonable limit)
     },
+
+    // optional attached file from employee or dept head
+    requestAttachment: {
+      type: String,
+      default: null,
+    },
+
     status: {
       type: String,
       enum: ["Pending", "Approved", "Rejected"],
       default: "Pending",
     },
-    pdfFile: {
+
+    // admin rejection explanation
+    adminDecisionReason: {
       type: String,
+      default: "",
     },
-    approvedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-    },
-    rejectionReason: {
+
+    // admin uploaded letter
+    letterFile: {
       type: String,
+      default: null,
+    },
+
+    // generated letter link if system auto creates
+    generatedLetterLink: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }
 );
 
-// Optional: Add index for better performance
-WorkExperienceRequestSchema.index({ employee: 1, status: 1 });
-WorkExperienceRequestSchema.index({ department: 1, status: 1 });
-WorkExperienceRequestSchema.index({ requestedByRole: 1, createdAt: -1 });
-
-const WorkExperienceRequest = mongoose.model(
+export default mongoose.model(
   "WorkExperienceRequest",
   WorkExperienceRequestSchema
 );
-
-export default WorkExperienceRequest;

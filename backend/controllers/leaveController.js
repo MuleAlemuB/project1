@@ -19,6 +19,13 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     throw new Error("Only DeptHead can apply leave to Admin");
   }
 
+  // map files to include name + url
+  const attachments = req.files?.map((f) => ({
+    name: f.originalname, // original uploaded file name
+    url: f.path,          // server path to file
+    uploadedAt: new Date(),
+  })) || [];
+
   const leave = await LeaveRequest.create({
     requester: user._id,
     requesterModel: "User",
@@ -30,7 +37,7 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     startDate,
     endDate,
     reason,
-    attachments: req.files?.map(f => f.filename) || [],
+    attachments,
     status: "pending",
   });
 
@@ -106,6 +113,10 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
 
   res.json({ message: `Leave request ${status} successfully`, leave });
 });
+
+/**
+ * Get my leave requests (DeptHead or Employee)
+ */
 export const getMyLeaveRequests = asyncHandler(async (req, res) => {
   const user = req.user;
 
@@ -116,8 +127,11 @@ export const getMyLeaveRequests = asyncHandler(async (req, res) => {
   const leaves = await LeaveRequest.find(filter).sort({ createdAt: -1 });
   res.json(leaves);
 });
-// DELETE /api/leaves/requests/:id
-const deleteLeaveRequest = asyncHandler(async (req, res) => {
+
+/**
+ * DELETE leave request
+ */
+export const deleteLeaveRequest = asyncHandler(async (req, res) => {
   const leave = await LeaveRequest.findById(req.params.id);
 
   if (!leave) {
@@ -125,14 +139,6 @@ const deleteLeaveRequest = asyncHandler(async (req, res) => {
     throw new Error("Leave request not found");
   }
 
-  // Only the requester or department head can delete (optional)
-  // if (req.user.role !== "departmenthead" && leave.requester.toString() !== req.user._id.toString()) {
-  //   res.status(403);
-  //   throw new Error("Not authorized to delete this leave request");
-  // }
-
-  await LeaveRequest.deleteOne({ _id: leave._id }); // ✅ Use deleteOne instead of remove
+  await LeaveRequest.deleteOne({ _id: leave._id });
   res.status(200).json({ message: "Leave request deleted successfully" });
 });
-
-export { deleteLeaveRequest };
