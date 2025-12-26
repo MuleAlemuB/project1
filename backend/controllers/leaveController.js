@@ -33,6 +33,7 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     targetRole: "Admin",
     requesterName: `${user.firstName} ${user.lastName}`,
     requesterEmail: user.email,
+    requesterEmpId: user.empId, // ADD THIS LINE
     department: user.department?.name,
     startDate,
     endDate,
@@ -48,6 +49,16 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     message: `Department Head ${user.firstName} ${user.lastName} requested leave from ${startDate} to ${endDate}`,
     leaveRequestId: leave._id,
     status: "pending",
+    // Add metadata with employee ID
+    metadata: {
+      employeeName: `${user.firstName} ${user.lastName}`,
+      empId: user.empId, // ADD THIS
+      department: user.department?.name,
+      email: user.email,
+      startDate,
+      endDate,
+      reason
+    }
   });
 
   res.status(201).json({ message: "Leave request sent to Admin", leave });
@@ -103,6 +114,16 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
   leave.status = status;
   await leave.save();
 
+  // Update the existing notification instead of creating a new one
+  await Notification.findOneAndUpdate(
+    { leaveRequestId: leave._id },
+    { 
+      status: status,
+      $set: { seen: false } // Make it unread for the requester
+    }
+  );
+
+  // Create a new notification for the requester
   await Notification.create({
     type: "Leave",
     recipientRole: leave.requesterRole,
@@ -113,7 +134,6 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
 
   res.json({ message: `Leave request ${status} successfully`, leave });
 });
-
 /**
  * Get my leave requests (DeptHead or Employee)
  */

@@ -122,6 +122,9 @@ export const getDeptNotifications = asyncHandler(async (req, res) => {
 // ================================
 // GET Department Statistics (Fixed)
 // ================================
+// ================================
+// GET Department Statistics (Fixed)
+// ================================
 export const getDeptStats = asyncHandler(async (req, res) => {
   const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
 
@@ -130,7 +133,9 @@ export const getDeptStats = asyncHandler(async (req, res) => {
   }
 
   const deptId = deptHead.department._id;
+  const deptName = deptHead.department.name;
 
+  // Fix 1: Count employees by department ID
   const totalEmployees = await Employee.countDocuments({
     department: deptId,
     $or: [
@@ -140,24 +145,41 @@ export const getDeptStats = asyncHandler(async (req, res) => {
     ]
   });
 
+  // Fix 2: Check how department is stored in LeaveRequest
+  // Try both department name and department ID
   const pendingLeaves = await LeaveRequest.countDocuments({
-    department: deptId,
+    $or: [
+      { department: deptId },  // If stored as ObjectId
+      { department: deptName }, // If stored as string name
+      { "department._id": deptId }, // If stored as object
+      { "department.name": deptName } // If stored as object with name
+    ],
     targetRole: "DepartmentHead",
     status: "pending"
   });
 
+  // Fix 3: Make sure we're counting unread notifications
   const notifications = await Notification.countDocuments({
     $or: [
-      { recipient: req.user._id, seen: { $ne: true } },
-      { recipientRole: "departmenthead", seen: { $ne: true } }
+      { recipient: req.user._id, seen: false },
+      { recipientRole: "DepartmentHead", seen: false },
+      { recipientRole: "departmenthead", seen: false } // Lowercase version
     ]
+  });
+
+  console.log("Dept Stats Debug:", {
+    deptId,
+    deptName,
+    totalEmployees,
+    pendingLeaves,
+    notifications
   });
 
   res.status(200).json({
     totalEmployees,
     pendingLeaves,
     notifications,
-    department: deptHead.department.name
+    department: deptName
   });
 });
 

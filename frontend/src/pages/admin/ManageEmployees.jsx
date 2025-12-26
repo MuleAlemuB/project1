@@ -419,25 +419,26 @@ const ManageEmployee = () => {
   };
 
   // Generate unique Employee ID
-  const generateUniqueEmpId = () => {
-    let empId;
-    let attempts = 0;
-    const maxAttempts = 50;
+  // Generate unique Employee ID
+const generateUniqueEmpId = () => {
+  let empId;
+  let attempts = 0;
+  const maxAttempts = 50;
+  
+  do {
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    empId = `DTU${randomNum}`; // <-- CHANGED FROM "EMP" TO "DTU"
+    attempts++;
     
-    do {
-      const randomNum = Math.floor(1000 + Math.random() * 9000);
-      empId = `EMP${randomNum}`;
-      attempts++;
-      
-      if (attempts >= maxAttempts) {
-        const timestamp = Date.now().toString().slice(-4);
-        empId = `EMP${timestamp}`;
-      }
-    } while (usedEmpIds.has(empId) && attempts < maxAttempts * 2);
-    
-    setUsedEmpIds(prev => new Set([...prev, empId]));
-    return empId;
-  };
+    if (attempts >= maxAttempts) {
+      const timestamp = Date.now().toString().slice(-4);
+      empId = `DTU${timestamp}`; // <-- CHANGED FROM "EMP" TO "DTU"
+    }
+  } while (usedEmpIds.has(empId) && attempts < maxAttempts * 2);
+  
+  setUsedEmpIds(prev => new Set([...prev, empId]));
+  return empId;
+};
 
   // Copy to clipboard
   const copyToClipboard = (text, field) => {

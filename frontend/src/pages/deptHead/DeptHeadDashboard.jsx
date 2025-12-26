@@ -55,7 +55,9 @@ const translations = {
     noPendingLeaves: "No pending leaves",
     noNotifications: "No new notifications",
     refresh: "Refresh",
-    today: "Today"
+    today: "Today",
+    markAllRead: "Mark All as Read",
+    viewNotifications: "View Notifications"
   },
   am: {
     welcome: "እንኳን በደህና መጡ",
@@ -86,9 +88,11 @@ const translations = {
     recentActivity: "የቅርብ ምርቃት",
     viewDetails: "ዝርዝር አሳይ",
     noPendingLeaves: "ምንም የቆየ ፈቃድ የለም",
-    noNotifications: "ምንም አዲስ ማሳወቂያ የለም",
+    noNotifications: "ምንም አዲስ �ማሳወቂያ የለም",
     refresh: "አድስ",
-    today: "ዛሬ"
+    today: "ዛሬ",
+    markAllRead: "ሁሉንም እንደተነበቡ ምልክት አድርግ",
+    viewNotifications: "ማሳወቂያዎችን እይ"
   },
 };
 
@@ -107,6 +111,9 @@ const DeptHeadDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   const t = translations[language];
 
@@ -119,13 +126,12 @@ const DeptHeadDashboard = () => {
     try {
       console.log("Fetching dashboard data...");
       
-      // CORRECT ENDPOINTS:
       // 1. Get department head profile
       const profileRes = await axiosInstance.get("/depthead/profile");
       console.log("Profile response:", profileRes.data);
       setDeptHead(profileRes.data);
       
-      // 2. Get statistics using the CORRECT endpoint
+      // 2. Get statistics
       const statsRes = await axiosInstance.get("/depthead/stats");
       console.log("Stats response:", statsRes.data);
       setStats(statsRes.data);
@@ -149,6 +155,49 @@ const DeptHeadDashboard = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    if (!authUser) return;
+    
+    setNotificationsLoading(true);
+    try {
+      const res = await axiosInstance.get("/depthead/notifications");
+      setNotificationsList(res.data);
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      await axiosInstance.put("/notifications/mark-all-read");
+      // Refresh notifications and stats
+      await fetchNotifications();
+      await fetchDashboardData();
+    } catch (err) {
+      console.error("Error marking all as read:", err);
+    }
+  };
+
+  const markAsRead = async (notificationId) => {
+    try {
+      await axiosInstance.put(`/notifications/${notificationId}/seen`);
+      // Refresh notifications and stats
+      await fetchNotifications();
+      await fetchDashboardData();
+    } catch (err) {
+      console.error("Error marking as read:", err);
+    }
+  };
+
+  const toggleNotificationDropdown = async () => {
+    if (!showNotificationDropdown) {
+      await fetchNotifications();
+    }
+    setShowNotificationDropdown(!showNotificationDropdown);
+  };
+
   useEffect(() => {
     fetchDashboardData();
   }, [authUser, language]);
@@ -167,6 +216,21 @@ const DeptHeadDashboard = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
+  };
+
+  const formatTimeAgo = (date) => {
+    if (!date) return "";
+    const now = new Date();
+    const notificationDate = new Date(date);
+    const diffMs = now - notificationDate;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return language === "en" ? "Just now" : "አሁን";
+    if (diffMins < 60) return `${diffMins} ${language === "en" ? "min" : "ደቂቃ"}`;
+    if (diffHours < 24) return `${diffHours} ${language === "en" ? "hr" : "ሰአት"}`;
+    return `${diffDays} ${language === "en" ? "day" : "ቀን"}`;
   };
 
   if (loading && !deptHead) {
@@ -231,6 +295,124 @@ const DeptHeadDashboard = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Notifications Bell with Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={toggleNotificationDropdown}
+                    className={`p-2 sm:p-3 rounded-xl transition-all relative ${
+                      darkMode
+                        ? "bg-gray-800 hover:bg-gray-700 text-gray-300"
+                        : "bg-white hover:bg-gray-100 text-gray-600 shadow-md"
+                    }`}
+                    title={t.notifications}
+                  >
+                    <FaBell className="text-sm sm:text-lg" />
+                    {stats.notifications > 0 && (
+                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                        {stats.notifications > 9 ? "9+" : stats.notifications}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Notification Dropdown */}
+                  {showNotificationDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-xl shadow-2xl border ${
+                        darkMode
+                          ? "bg-gray-800 border-gray-700"
+                          : "bg-white border-gray-200"
+                      }`}
+                    >
+                      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-bold text-lg">{t.notifications}</h3>
+                          {stats.notifications > 0 && (
+                            <button
+                              onClick={markAllAsRead}
+                              className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400"
+                            >
+                              {t.markAllRead}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="max-h-96 overflow-y-auto">
+                        {notificationsLoading ? (
+                          <div className="p-8 text-center">
+                            <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500"></div>
+                            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                              {language === "en" ? "Loading notifications..." : "ማሳወቂያዎች በመጫን ላይ..."}
+                            </p>
+                          </div>
+                        ) : notificationsList.length > 0 ? (
+                          notificationsList.map((notification) => (
+                            <div
+                              key={notification._id}
+                              className={`p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
+                                !notification.seen ? "bg-blue-50 dark:bg-blue-900/20" : ""
+                              }`}
+                              onClick={() => {
+                                markAsRead(notification._id);
+                                navigate("/departmenthead/notifications");
+                              }}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                  <p className={`font-medium ${
+                                    darkMode ? "text-gray-200" : "text-gray-800"
+                                  }`}>
+                                    {notification.message}
+                                  </p>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {formatTimeAgo(notification.createdAt)}
+                                  </p>
+                                </div>
+                                {!notification.seen && (
+                                  <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                )}
+                              </div>
+                              {notification.type && (
+                                <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
+                                  notification.type === "Leave"
+                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                                    : notification.type === "Requisition"
+                                    ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
+                                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                }`}>
+                                  {notification.type}
+                                </span>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-8 text-center">
+                            <FaBell className="text-4xl text-gray-400 dark:text-gray-600 mx-auto mb-3" />
+                            <p className="text-gray-500 dark:text-gray-400">
+                              {t.noNotifications}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+                        <button
+                          onClick={() => {
+                            setShowNotificationDropdown(false);
+                            navigate("/departmenthead/notifications");
+                          }}
+                          className="w-full py-2 text-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium"
+                        >
+                          {t.viewNotifications} →
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+
                 <button
                   onClick={() => setLanguage(language === "en" ? "am" : "en")}
                   className={`p-2 sm:p-3 rounded-xl transition-all ${
@@ -269,6 +451,14 @@ const DeptHeadDashboard = () => {
           </div>
         </div>
       </header>
+
+      {/* Close dropdown when clicking outside */}
+      {showNotificationDropdown && (
+        <div 
+          className="fixed inset-0 z-40"
+          onClick={() => setShowNotificationDropdown(false)}
+        />
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">

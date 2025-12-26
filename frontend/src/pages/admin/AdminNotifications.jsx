@@ -28,25 +28,29 @@ import {
   FaEyeSlash,
   FaSearch,
   FaSort,
-  FaSortUp,
-  FaSortDown,
   FaCommentAlt,
-  FaSave,
   FaCalendarCheck,
-  FaCalendarTimes,
   FaUserTie,
-  FaUniversity,
   FaCertificate,
   FaFilePdf,
   FaFileWord,
   FaFileImage,
   FaFileArchive,
-  FaLink,
   FaUserCircle,
   FaIdCard,
-  FaCalendarDay,
   FaStickyNote,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaMapMarkerAlt,
+  FaMoneyBillWave,
+  FaLayerGroup,
+  FaChartLine,
+  FaTools,
+  FaFileContract,
+  FaFileSignature,
+  FaUserGraduate,
+  FaBusinessTime,
+  FaRegClock,
+  FaCalendarTimes
 } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSettings } from "../../contexts/SettingsContext";
@@ -93,6 +97,7 @@ const getTypeColor = (type) => {
     case 'Vacancy Application': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300';
     case 'Leave': return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300';
     case 'Requisition': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
+    case 'Work Experience': return 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300';
     default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
   }
 };
@@ -102,25 +107,101 @@ const getTypeIcon = (type) => {
     case 'Vacancy Application': return <FaUser className="inline mr-2" />;
     case 'Leave': return <FaCalendar className="inline mr-2" />;
     case 'Requisition': return <FaBriefcase className="inline mr-2" />;
+    case 'Work Experience': return <FaCertificate className="inline mr-2" />;
     default: return <FaBell className="inline mr-2" />;
   }
 };
 
+// FIXED: getFileIcon function to handle both string and object inputs
 const getFileIcon = (filename) => {
-  if (!filename) return <FaFileAlt />;
-  const ext = filename.split('.').pop().toLowerCase();
-  switch (ext) {
-    case 'pdf': return <FaFilePdf className="text-red-500" />;
-    case 'doc':
-    case 'docx': return <FaFileWord className="text-blue-500" />;
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-    case 'gif': return <FaFileImage className="text-green-500" />;
-    case 'zip':
-    case 'rar':
-    case '7z': return <FaFileArchive className="text-yellow-500" />;
-    default: return <FaFileAlt />;
+  try {
+    if (!filename) return <FaFileAlt />;
+    
+    // If filename is an object (attachment object), extract the filename
+    let actualFilename;
+    if (typeof filename === 'object' && filename !== null) {
+      // Try different possible property names from backend
+      actualFilename = filename.filename || filename.name || filename.originalname || 
+                       filename.url || filename.path || 'file';
+      
+      // If we got a path/URL, extract just the filename
+      if (actualFilename.includes('/') || actualFilename.includes('\\')) {
+        actualFilename = actualFilename.split(/[/\\]/).pop();
+      }
+    } else if (typeof filename === 'string') {
+      actualFilename = filename;
+    } else {
+      return <FaFileAlt />;
+    }
+    
+    const ext = actualFilename.split('.').pop().toLowerCase();
+    switch (ext) {
+      case 'pdf': return <FaFilePdf className="text-red-500" />;
+      case 'doc':
+      case 'docx': return <FaFileWord className="text-blue-500" />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif': return <FaFileImage className="text-green-500" />;
+      case 'zip':
+      case 'rar':
+      case '7z': return <FaFileArchive className="text-yellow-500" />;
+      default: return <FaFileAlt />;
+    }
+  } catch (error) {
+    console.warn('Error getting file icon for:', filename, error);
+    return <FaFileAlt />;
+  }
+};
+
+// Helper function to extract filename from attachment object
+const getFileName = (attachment) => {
+  try {
+    if (!attachment) return 'file';
+    
+    if (typeof attachment === 'object' && attachment !== null) {
+      // Try different possible property names from backend
+      const filename = attachment.filename || attachment.name || attachment.originalname || 
+                       attachment.url || attachment.path || 'attachment';
+      
+      // If it's a path/URL, extract just the filename
+      if (typeof filename === 'string' && (filename.includes('/') || filename.includes('\\'))) {
+        return filename.split(/[/\\]/).pop();
+      }
+      return filename;
+    }
+    
+    if (typeof attachment === 'string') {
+      if (attachment.includes('/') || attachment.includes('\\')) {
+        return attachment.split(/[/\\]/).pop();
+      }
+      return attachment;
+    }
+    
+    return 'file';
+  } catch (error) {
+    console.warn('Error extracting filename:', error);
+    return 'file';
+  }
+};
+
+// Helper function to get file URL from attachment object
+const getFileUrl = (attachment) => {
+  try {
+    if (!attachment) return '#';
+    
+    if (typeof attachment === 'object' && attachment !== null) {
+      return fileUrl(attachment.url || attachment.path || attachment.filename || '');
+    }
+    
+    if (typeof attachment === 'string') {
+      return fileUrl(attachment);
+    }
+    
+    return '#';
+  } catch (error) {
+    console.warn('Error getting file URL:', error);
+    return '#';
   }
 };
 
@@ -180,6 +261,7 @@ const translations = {
     vacancy: "Vacancy Applications",
     leave: "Leave Requests",
     requisition: "Requisitions",
+    workExperience: "Work Experience Requests",
     recent: "Most Recent",
     oldest: "Oldest",
     statusOrder: "By Status",
@@ -236,9 +318,8 @@ const translations = {
     makeYourDecision: "Make Your Decision",
     acceptRequest: "Accept Request",
     rejectRequest: "Reject Request",
-    optionalComment: "Optional Comment (for rejection)",
+    optionalComment: "Optional Comment (for rejection only)",
     writeComment: "Write your comment here...",
-    submitDecision: "Submit Decision",
     vacancyInformation: "Vacancy Information",
     jobTitle: "Job Title",
     applicationId: "Application ID",
@@ -247,7 +328,48 @@ const translations = {
     supportingDocument: "Supporting document",
     anyGender: "Any",
     empId: "Employee ID",
-    loadingDetails: "Loading details..."
+    loadingDetails: "Loading details...",
+    workExperienceDetails: "Work Experience Request Details",
+    employeeInfo: "Employee Information",
+    employeeName: "Employee Name",
+    employeeRole: "Role",
+    employeeEmail: "Employee Email",
+    experienceReason: "Reason for Request",
+    requestAttachment: "Request Attachment",
+    letterFile: "Generated Letter",
+    adminDecisionReason: "Admin Decision Reason",
+    generatedLetterLink: "Generated Letter Link",
+    downloadLetter: "Download Letter",
+    viewLetter: "View Letter",
+    roleSubmitted: "Submitted By",
+    workExperienceLetter: "Work Experience Letter",
+    pendingApproval: "Pending Approval",
+    requestDate: "Request Date",
+    employeePosition: "Position",
+    yearsOfService: "Years of Service",
+    currentDepartment: "Current Department",
+    purpose: "Purpose",
+    supportingDocs: "Supporting Documents",
+    adminResponse: "Admin Response",
+    uploadDate: "Upload Date",
+    downloadRequestDoc: "Download Request Document",
+    noAttachment: "No attachment provided",
+    requesterRole: "Requester Role",
+    departmentHead: "Department Head",
+    regularEmployee: "Employee",
+    male: "Male",
+    female: "Female",
+    fullTime: "Full Time",
+    partTime: "Part Time",
+    permanent: "Permanent",
+    temporary: "Temporary",
+    contract: "Contract",
+    urgent: "Urgent",
+    normal: "Normal",
+    leaveStatus: "Leave Status",
+    requisitionStatus: "Requisition Status",
+    experienceStatus: "Work Experience Status",
+    applicationStatus: "Application Status"
   },
   am: {
     adminNotifications: "የአስተዳደር ማሳወቂያ ማዕከል",
@@ -303,6 +425,7 @@ const translations = {
     vacancy: "የስራ ማመልከቻዎች",
     leave: "የፈቃድ ጥያቄዎች",
     requisition: "የጥያቄዎች",
+    workExperience: "የስራ ልምድ ጥያቄዎች",
     recent: "አዲስ የተደረጉ",
     oldest: "የድሮ የተደረጉ",
     statusOrder: "በሁኔታ",
@@ -359,9 +482,8 @@ const translations = {
     makeYourDecision: "ውሳኔዎን ያድርጉ",
     acceptRequest: "ጥያቄ ተቀበል",
     rejectRequest: "ጥያቄ ተቀባ",
-    optionalComment: "አማራጭ አስተያየት (ለመቀባት)",
+    optionalComment: "አማራጭ አስተያየት (ለመቀባት ብቻ)",
     writeComment: "አስተያየትዎን እዚህ ይፃፉ...",
-    submitDecision: "ውሳኔ አስገባ",
     vacancyInformation: "የስራ መረጃ",
     jobTitle: "የስራ ርዕስ",
     applicationId: "የማመልከቻ መታወቂያ",
@@ -370,7 +492,47 @@ const translations = {
     supportingDocument: "የማገዝ ሰነድ",
     anyGender: "ማንኛውም",
     empId: "ሰራተኛ መታወቂያ",
-    loadingDetails: "ዝርዝር እየጫነ ነው..."
+    loadingDetails: "ዝርዝር እየጫነ ነው...",
+    workExperienceDetails: "የስራ ልምድ ጥያቄ ዝርዝሮች",
+    employeeInfo: "የሰራተኛ መረጃ",
+    employeeName: "የሰራተኛ ስም",
+    employeeRole: "ሚና",
+    employeeEmail: "የሰራተኛ ኢሜይል",
+    experienceReason: "ለጥያቄ ምክንያት",
+    requestAttachment: "የጥያቄ መያዣ",
+    letterFile: "የተመነደረ ደብዳቤ",
+    adminDecisionReason: "የአስተዳደር ውሳኔ ምክንያት",
+    generatedLetterLink: "የተመነደረ ደብዳቤ ማገናኛ",
+    downloadLetter: "ደብዳቤ አውርድ",
+    viewLetter: "ደብዳቤ እይ",
+    roleSubmitted: "አስገብቷል በ",
+    workExperienceLetter: "የስራ ልምድ ደብዳቤ",
+    pendingApproval: "ለፍቃድ በጥበቃ ላይ",
+    employeePosition: "ስራ ቦታ",
+    yearsOfService: "የአገልግሎት ዓመታት",
+    currentDepartment: "አሁን ያለበት ክፍል",
+    purpose: "ግብ",
+    supportingDocs: "የማገዝ ሰነዶች",
+    adminResponse: "የአስተዳደር ምላሽ",
+    uploadDate: "የመጫን ቀን",
+    downloadRequestDoc: "የጥያቄ ሰነድ አውርድ",
+    noAttachment: "መያዣ አልተሰጠም",
+    requesterRole: "የጠያቂ ሚና",
+    departmentHead: "የክፍል ሃላፊ",
+    regularEmployee: "ሰራተኛ",
+    male: "ወንድ",
+    female: "ሴት",
+    fullTime: "ሙሉ ጊዜ",
+    partTime: "ከፊል ጊዜ",
+    permanent: "ቋሚ",
+    temporary: "ጊዜያዊ",
+    contract: "ኮንትራት",
+    urgent: "አስቸኳይ",
+    normal: "መደበኛ",
+    leaveStatus: "የፈቃድ ሁኔታ",
+    requisitionStatus: "የጥያቄ ሁኔታ",
+    experienceStatus: "የስራ ልምድ ሁኔታ",
+    applicationStatus: "የማመልከቻ ሁኔታ"
   }
 };
 
@@ -488,59 +650,70 @@ const AdminNotifications = () => {
   };
 
   const handleDecision = async (notif, status, reason) => {
-    setDecisionLoading(true);
-    try {
-      let endpoint, data;
-      
-      if (notif.type === "Leave") {
-        endpoint = `/leaves/${notif.leaveRequestId?._id || notif.reference}/status`;
-        data = { status, adminComment: reason || undefined };
-      } else if (notif.type === "Requisition") {
-        endpoint = `/requisitions/${notif.reference}/status`;
-        data = { status, adminComment: reason || undefined };
-      } else if (notif.type === "Vacancy Application") {
-        endpoint = `/applications/${notif.reference}/status`;
-        data = { status, adminComment: reason || undefined };
-      } else {
-        throw new Error("Invalid notification type for decision");
-      }
-      
-      await axiosInstance.put(endpoint, data);
-      
-      setNotifications(prev =>
-        prev.map(n =>
-          n._id === notif._id ? { ...n, status: status.toLowerCase() } : n
-        )
-      );
-      
-      if (reason && reason.trim()) {
-        const newComment = {
-          text: reason.trim(),
-          type: 'admin',
-          status: status,
-          createdAt: new Date().toISOString()
-        };
-        
-        const updatedComments = {
-          ...localComments,
-          [notif._id]: [...(localComments[notif._id] || []), newComment]
-        };
-        
-        setLocalComments(updatedComments);
-        localStorage.setItem("notificationComments", JSON.stringify(updatedComments));
-      }
-      
-      setShowDecisionModal(null);
-      setDecisionReason("");
-      
-      alert(t.decisionSuccess);
-    } catch (error) {
-      console.error("Error making decision:", error);
-      alert(t.decisionError);
-    } finally {
-      setDecisionLoading(false);
+  setDecisionLoading(true);
+  try {
+    let endpoint, data;
+    
+    if (notif.type === "Leave") {
+      endpoint = `/leaves/requests/${notif.leaveRequestId?._id || notif.reference}/status`;
+      data = { status, adminComment: reason || undefined };
+    } else if (notif.type === "Requisition") {
+      endpoint = `/requisitions/${notif.reference}/status`;
+      data = { status, adminComment: reason || undefined };
+    } else if (notif.type === "Work Experience") {
+      endpoint = `/work-experience/${notif.reference}/status`;
+      data = { status, adminComment: reason || undefined };
+    } else if (notif.type === "Vacancy Application") {
+      endpoint = `/applications/${notif.reference}/status`;
+      data = { status, adminComment: reason || undefined };
+    } else {
+      throw new Error("Invalid notification type for decision");
     }
-  };
+    
+    await axiosInstance.put(endpoint, data);
+    
+    // Refresh notifications from backend
+    const res = await axiosInstance.get("/notifications/my");
+    const seenState = JSON.parse(localStorage.getItem("notifSeen") || "{}");
+    
+    const merged = res.data.map((n) => ({
+      ...n,
+      seen: seenState[n._id] ?? n.seen,
+      status: n.status?.toLowerCase(),
+      timestamp: new Date(n.createdAt).getTime(),
+      metadata: n.metadata ? (typeof n.metadata === 'string' ? JSON.parse(n.metadata) : n.metadata) : {}
+    }));
+    
+    setNotifications(merged);
+    
+    if (reason && reason.trim()) {
+      const newComment = {
+        text: reason.trim(),
+        type: 'admin',
+        status: status,
+        createdAt: new Date().toISOString()
+      };
+      
+      const updatedComments = {
+        ...localComments,
+        [notif._id]: [...(localComments[notif._id] || []), newComment]
+      };
+      
+      setLocalComments(updatedComments);
+      localStorage.setItem("notificationComments", JSON.stringify(updatedComments));
+    }
+    
+    setShowDecisionModal(null);
+    setDecisionReason("");
+    
+    alert(t.decisionSuccess);
+  } catch (error) {
+    console.error("Error making decision:", error);
+    alert(t.decisionError);
+  } finally {
+    setDecisionLoading(false);
+  }
+};
 
   const toggleDetails = (notif) => {
     setDetailsOpen(prev => ({ ...prev, [notif._id]: !prev[notif._id] }));
@@ -583,6 +756,7 @@ const AdminNotifications = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.appliedAt}</p>
               <p className="font-medium">{formatSimpleDate(applicant.appliedAt || notif.createdAt)}</p>
             </div>
+            
           </div>
         </div>
         
@@ -599,14 +773,8 @@ const AdminNotifications = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.department}</p>
               <p className="font-medium">{vacancy.department || notif.metadata?.department || "N/A"}</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.position}</p>
-              <p className="font-medium">{vacancy.position || notif.metadata?.position || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.applicationId}</p>
-              <p className="font-medium font-mono text-sm">{notif.reference || "N/A"}</p>
-            </div>
+            
+            
           </div>
         </div>
         
@@ -620,7 +788,7 @@ const AdminNotifications = () => {
                 {getFileIcon(applicant.resume || notif.metadata?.resume)}
                 <div>
                   <p className="font-medium">
-                    {applicant.resume?.split('/').pop() || notif.metadata?.resume?.split('/').pop() || "resume.pdf"}
+                    {getFileName(applicant.resume || notif.metadata?.resume)}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {applicant.resume ? "CV uploaded by applicant" : "CV attached"}
@@ -628,7 +796,7 @@ const AdminNotifications = () => {
                 </div>
               </div>
               <a
-                href={fileUrl(applicant.resume || notif.metadata?.resume)}
+                href={getFileUrl(applicant.resume || notif.metadata?.resume)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
@@ -639,49 +807,15 @@ const AdminNotifications = () => {
           </div>
         )}
         
-        {notif.status === "pending" && (
-          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-            <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-              {t.makeYourDecision}
-            </h4>
-            <div className="space-y-4">
-              <div>
-                <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                  <FaCommentAlt className="inline mr-2" /> {t.optionalComment}
-                </label>
-                <textarea
-                  value={decisionReason}
-                  onChange={(e) => setDecisionReason(e.target.value)}
-                  placeholder={t.writeComment}
-                  rows="3"
-                  className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300 ${
-                    darkMode 
-                      ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
-                      : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
-                  }`}
-                />
-              </div>
-              <div className="flex gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept' })}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
-                >
-                  <FaThumbsUp /> {t.acceptRequest}
-                </motion.button>
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject' })}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
-                >
-                  <FaThumbsDown /> {t.rejectRequest}
-                </motion.button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* No accept/reject buttons for vacancy applications */}
+        <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}>
+          <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"} flex items-center gap-2`}>
+            <FaInfoCircle /> 
+            {language === "am" 
+              ? "ይህ የስራ ማመልከቻ ነው። የተመልከተውን ውይይት ካደረጉ በኋላ ውሳኔዎን ያስቀምጡ።" 
+              : "This is a job application. Review the applicant's details and make your decision in your records."}
+          </p>
+        </div>
       </div>
     );
   };
@@ -699,7 +833,7 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.name}</p>
-              <p className="font-medium">{employee.name || leave.employeeName || "N/A"}</p>
+              <p className="font-medium">{employee.name || leave.employeeName || leave.requesterName || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeDepartment}</p>
@@ -708,6 +842,14 @@ const AdminNotifications = () => {
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
               <p className="font-medium">{employee.empId || leave.empId || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
+              <p className="font-medium">{employee.email || leave.requesterEmail || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterRole}</p>
+              <p className="font-medium">{leave.requesterRole === "DepartmentHead" ? t.departmentHead : t.regularEmployee}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
@@ -733,9 +875,13 @@ const AdminNotifications = () => {
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.totalDays}</p>
               <p className="font-medium">{calculateDays(leave.startDate, leave.endDate)}</p>
             </div>
+            
+            
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.leaveType}</p>
-              <p className="font-medium">{leave.leaveType || t.annualLeave}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.leaveStatus}</p>
+              <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
+                {notif.status?.toUpperCase() || t.pending}
+              </p>
             </div>
           </div>
         </div>
@@ -762,12 +908,12 @@ const AdminNotifications = () => {
                   <div className="flex items-center gap-3">
                     {getFileIcon(attachment)}
                     <div>
-                      <p className="font-medium">{attachment.split('/').pop()}</p>
+                      <p className="font-medium">{getFileName(attachment)}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{t.supportingDocument}</p>
                     </div>
                   </div>
                   <a
-                    href={fileUrl(attachment)}
+                    href={getFileUrl(attachment)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
@@ -780,6 +926,7 @@ const AdminNotifications = () => {
           </div>
         )}
         
+        {/* Decision section for pending leave requests */}
         {notif.status === "pending" && (
           <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
             <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
@@ -801,12 +948,17 @@ const AdminNotifications = () => {
                       : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
                   }`}
                 />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {language === "am" 
+                    ? "አስተያየት ለመቀባት ብቻ አማራጭ ነው። ለመቀበል ባዶ ሊተውት ይችላሉ።" 
+                    : "Comment is optional for rejection only. You can leave it blank for approval."}
+                </p>
               </div>
               <div className="flex gap-3">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Leave' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
                 >
                   <FaThumbsUp /> {t.acceptRequest}
@@ -814,7 +966,7 @@ const AdminNotifications = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Leave' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
                 >
                   <FaThumbsDown /> {t.rejectRequest}
@@ -840,7 +992,7 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterName}</p>
-              <p className="font-medium">{requester.name || requisition.requesterName || "N/A"}</p>
+              <p className="font-medium">{requester.name || requisition.requesterName || requisition.requestedBy || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterDepartment}</p>
@@ -848,11 +1000,11 @@ const AdminNotifications = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
-              <p className="font-medium">{requester.email || requisition.email || "N/A"}</p>
+              <p className="font-medium">{requester.email || requisition.requestedByEmail || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
-              <p className="font-medium">{formatSimpleDate(requisition.requestDate || notif.createdAt)}</p>
+              <p className="font-medium">{formatSimpleDate(requisition.requestDate || requisition.date || notif.createdAt)}</p>
             </div>
           </div>
         </div>
@@ -872,7 +1024,7 @@ const AdminNotifications = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.educationLevel}</p>
-              <p className="font-medium">{requisition.educationLevel || requisition.education || "N/A"}</p>
+              <p className="font-medium">{requisition.educationalLevel || requisition.educationLevel || requisition.education || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.quantityNeeded}</p>
@@ -880,11 +1032,22 @@ const AdminNotifications = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.contractTerm}</p>
-              <p className="font-medium">{requisition.termOfEmployment || requisition.contractTerm || "N/A"}</p>
+              <p className="font-medium">
+                {requisition.termOfEmployment === "FullTime" ? t.fullTime : 
+                 requisition.termOfEmployment === "PartTime" ? t.partTime :
+                 requisition.termOfEmployment === "Permanent" ? t.permanent :
+                 requisition.termOfEmployment === "Temporary" ? t.temporary :
+                 requisition.termOfEmployment === "Contract" ? t.contract :
+                 requisition.termOfEmployment || "N/A"}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.genderRequirement}</p>
-              <p className="font-medium">{requisition.sex || requisition.gender || t.anyGender}</p>
+              <p className="font-medium">
+                {requisition.sex === "Male" ? t.male :
+                 requisition.sex === "Female" ? t.female :
+                 requisition.sex || t.anyGender}
+              </p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.experienceRequired}</p>
@@ -896,7 +1059,12 @@ const AdminNotifications = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.priorityLevel}</p>
-              <p className="font-medium capitalize">{requisition.priority || requisition.priorityLevel || "medium"}</p>
+              <p className="font-medium capitalize">
+                {requisition.priority === "high" ? t.high :
+                 requisition.priority === "medium" ? t.medium :
+                 requisition.priority === "low" ? t.low :
+                 requisition.priority || t.medium}
+              </p>
             </div>
           </div>
         </div>
@@ -923,12 +1091,12 @@ const AdminNotifications = () => {
                   <div className="flex items-center gap-3">
                     {getFileIcon(attachment)}
                     <div>
-                      <p className="font-medium">{attachment.split('/').pop()}</p>
+                      <p className="font-medium">{getFileName(attachment)}</p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{t.supportingDocument}</p>
                     </div>
                   </div>
                   <a
-                    href={fileUrl(attachment)}
+                    href={getFileUrl(attachment)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
@@ -941,6 +1109,7 @@ const AdminNotifications = () => {
           </div>
         )}
         
+        {/* Decision section for pending requisitions */}
         {notif.status === "pending" && (
           <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
             <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
@@ -962,12 +1131,17 @@ const AdminNotifications = () => {
                       : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
                   }`}
                 />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {language === "am" 
+                    ? "አስተያየት ለመቀባት ብቻ አማራጭ ነው። ለመቀበል ባዶ ሊተውት ይችላሉ።" 
+                    : "Comment is optional for rejection only. You can leave it blank for approval."}
+                </p>
               </div>
               <div className="flex gap-3">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Requisition' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
                 >
                   <FaThumbsUp /> {t.acceptRequest}
@@ -975,7 +1149,178 @@ const AdminNotifications = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Requisition' })}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
+                >
+                  <FaThumbsDown /> {t.rejectRequest}
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderWorkExperienceDetails = (notif) => {
+    const experience = notif.metadata || {};
+    
+    return (
+      <div className="space-y-6">
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaUserGraduate /> {t.employeeInfo}
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeName}</p>
+              <p className="font-medium">{experience.employeeName || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeDepartment}</p>
+              <p className="font-medium">{experience.department || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeRole}</p>
+              <p className="font-medium">{experience.roleSubmitted === "DepartmentHead" ? t.departmentHead : t.regularEmployee}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeEmail}</p>
+              <p className="font-medium">{experience.email || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
+              <p className="font-medium">{experience.empId || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
+              <p className="font-medium">{formatSimpleDate(experience.createdAt || notif.createdAt)}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaCertificate /> {t.workExperienceDetails}
+          </h4>
+          
+          {experience.reason && (
+            <div className="mb-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{t.experienceReason}</p>
+              <div className={`p-3 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
+                <p className="whitespace-pre-wrap">{experience.reason}</p>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.experienceStatus}</p>
+              <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
+                {notif.status?.toUpperCase() || t.pending}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.roleSubmitted}</p>
+              <p className="font-medium">{experience.roleSubmitted === "DepartmentHead" ? t.departmentHead : t.regularEmployee}</p>
+            </div>
+          </div>
+        </div>
+        
+        {/* Attachments section */}
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaPaperclip /> {t.supportingDocs}
+          </h4>
+          
+          {/* Request attachment */}
+          {experience.requestAttachment && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-gray-100 dark:bg-gray-700 mb-3">
+              <div className="flex items-center gap-3">
+                {getFileIcon(experience.requestAttachment)}
+                <div>
+                  <p className="font-medium">{getFileName(experience.requestAttachment)}</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t.requestAttachment}</p>
+                </div>
+              </div>
+              <a
+                href={getFileUrl(experience.requestAttachment)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <FaDownload /> {t.downloadRequestDoc}
+              </a>
+            </div>
+          )}
+          
+          {/* Generated letter */}
+          {(experience.letterFile || experience.generatedLetterLink) && (
+            <div className="flex items-center justify-between p-3 rounded-lg bg-green-50 dark:bg-green-900/30">
+              <div className="flex items-center gap-3">
+                <FaFileContract className="text-green-500 text-xl" />
+                <div>
+                  <p className="font-medium">{getFileName(experience.letterFile || experience.generatedLetterLink)}</p>
+                  <p className="text-sm text-green-600 dark:text-green-400">{t.workExperienceLetter}</p>
+                </div>
+              </div>
+              <a
+                href={getFileUrl(experience.letterFile) || experience.generatedLetterLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <FaDownload /> {t.downloadLetter}
+              </a>
+            </div>
+          )}
+          
+          {!experience.requestAttachment && !experience.letterFile && !experience.generatedLetterLink && (
+            <p className="text-gray-500 dark:text-gray-400 italic">{t.noAttachment}</p>
+          )}
+        </div>
+        
+        {/* Decision section for pending work experience requests */}
+        {notif.status === "pending" && (
+          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+            <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+              {t.makeYourDecision}
+            </h4>
+            <div className="space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                  <FaCommentAlt className="inline mr-2" /> {t.optionalComment}
+                </label>
+                <textarea
+                  value={decisionReason}
+                  onChange={(e) => setDecisionReason(e.target.value)}
+                  placeholder={t.writeComment}
+                  rows="3"
+                  className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 transition-all duration-300 ${
+                    darkMode 
+                      ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
+                      : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
+                  }`}
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {language === "am" 
+                    ? "አስተያየት ለመቀባት ብቻ አማራጭ ነው። ለመቀበል ባዶ ሊተውት ይችላሉ።" 
+                    : "Comment is optional for rejection only. You can leave it blank for approval."}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Work Experience' })}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
+                >
+                  <FaThumbsUp /> {t.acceptRequest}
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Work Experience' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
                 >
                   <FaThumbsDown /> {t.rejectRequest}
@@ -1105,6 +1450,7 @@ const AdminNotifications = () => {
                 <option value="Vacancy Application">{t.vacancy}</option>
                 <option value="Leave">{t.leave}</option>
                 <option value="Requisition">{t.requisition}</option>
+                <option value="Work Experience">{t.workExperience}</option>
               </select>
             </div>
             
@@ -1279,7 +1625,7 @@ const AdminNotifications = () => {
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                       onClick={() => setShowDeleteConfirm(notif._id)}
-                      className="px-4 py-2 rounded-xl font-medium bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 transition-all duration-300"
+                      className="px-4 py-2 rounded-xl font-medium bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 transition-colors"
                     >
                       <FaTrash /> {t.delete}
                     </motion.button>
@@ -1304,7 +1650,8 @@ const AdminNotifications = () => {
                       {notif.type === "Vacancy Application" && renderVacancyDetails(notif)}
                       {notif.type === "Leave" && renderLeaveDetails(notif)}
                       {notif.type === "Requisition" && renderRequisitionDetails(notif)}
-                      {!["Vacancy Application", "Leave", "Requisition"].includes(notif.type) && renderGeneralDetails(notif)}
+                      {notif.type === "Work Experience" && renderWorkExperienceDetails(notif)}
+                      {!["Vacancy Application", "Leave", "Requisition", "Work Experience"].includes(notif.type) && renderGeneralDetails(notif)}
                       
                       {(localComments[notif._id] || []).length > 0 && (
                         <div className={`p-5 rounded-xl mt-6 ${darkMode ? "bg-gray-800" : "bg-white"}`}>
@@ -1399,22 +1746,18 @@ const AdminNotifications = () => {
                 {showDecisionModal.action === 'accept' ? t.confirmAccept : t.confirmReject}
               </h3>
               <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-                {decisionReason ? (
+                {decisionReason && showDecisionModal.action === 'reject' ? (
                   language === 'am' 
-                    ? showDecisionModal.action === 'accept'
-                      ? `ይህን ጥያቄ በዚህ ምክንያት ለመቀበል እርግጠኛ ነዎት: "${decisionReason}"`
-                      : `ይህን ጥያቄ በዚህ ምክንያት ለመቀባት እርግጠኛ ነዎት: "${decisionReason}"`
-                    : showDecisionModal.action === 'accept'
-                    ? `Are you sure you want to accept this request with the reason: "${decisionReason}"?`
-                    : `Are you sure you want to reject this request with the reason: "${decisionReason}"?`
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} በዚህ ምክንያት ለመቀባት እርግጠኛ ነዎት: "${decisionReason}"`
+                    : `Are you sure you want to reject this ${showDecisionModal.type.toLowerCase()} request with the reason: "${decisionReason}"?`
+                ) : showDecisionModal.action === 'reject' ? (
+                  language === 'am'
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} ምንም ምክንያት ሳይጠቀሱ ለመቀባት እርግጠኛ ነዎት?`
+                    : `Are you sure you want to reject this ${showDecisionModal.type.toLowerCase()} request without providing a reason?`
                 ) : (
                   language === 'am'
-                    ? showDecisionModal.action === 'accept'
-                      ? 'ይህን ጥያቄ ምንም ምክንያት ሳይጠቀሱ ለመቀበል እርግጠኛ ነዎት?'
-                      : 'ይህን ጥያቄ ምንም ምክንያት ሳይጠቀሱ ለመቀባት እርግጠኛ ነዎት?'
-                    : showDecisionModal.action === 'accept'
-                    ? 'Are you sure you want to accept this request without providing a reason?'
-                    : 'Are you sure you want to reject this request without providing a reason?'
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} ለመቀበል እርግጠኛ ነዎት?`
+                    : `Are you sure you want to accept this ${showDecisionModal.type.toLowerCase()} request?`
                 )}
               </p>
               <div className="flex justify-end gap-4">

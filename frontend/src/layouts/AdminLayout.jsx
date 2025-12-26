@@ -114,7 +114,7 @@ const AdminLayout = () => {
       to: "/admin/notifications", 
       icon: <BellIcon className="h-5 w-5" />,
       activeIcon: <BellIconSolid className="h-5 w-5" />,
-      badge: 3
+      
     },
   ];
 

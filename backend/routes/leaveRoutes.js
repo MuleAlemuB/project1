@@ -43,5 +43,6 @@ router.get("/my", protect, authorizeDeptHead, getMyLeaveRequests);
 
 // DELETE leave request
 router.delete("/requests/:id", protect, deleteLeaveRequest);
+router.put("/:id/status", protect, decideLeaveRequest);
 
 export default router;

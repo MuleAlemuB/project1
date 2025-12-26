@@ -17,6 +17,7 @@ import {
   FaBriefcase,
   FaFileAlt,
   FaPaperPlane,
+  FaSpinner
 } from "react-icons/fa";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
@@ -66,7 +67,15 @@ const translations = {
     sendNotification: "Send to Admin",
     notificationSent: "Notification sent to admin",
     notificationFailed: "Failed to send notification",
-    adminNotification: "New requisition submitted by Department Head {deptHead}: Position: {position}, Department: {department}, Quantity: {quantity}, Education: {education}",
+    justification: "Justification",
+    priority: "Priority Level",
+    high: "High",
+    medium: "Medium",
+    low: "Low",
+    viewFile: "View File",
+    downloadFile: "Download File",
+    uploadProgress: "Uploading files...",
+    fileUploaded: "File uploaded",
   },
   am: {
     title: "የመምሪያ ጥያቄዎች",
@@ -112,7 +121,15 @@ const translations = {
     sendNotification: "ለአስተዳዳሪ ላክ",
     notificationSent: "ለአስተዳዳሪ ማስታወቂያ ተልኳል",
     notificationFailed: "ማስታወቂያ ማስተላለፍ አልተቻለም",
-    adminNotification: "አዲስ ጥያቄ በመምሪያ ርዕሰ ክፍል {deptHead} ተልኳል፡ ስራ: {position}, ክፍል: {department}, ብዛት: {quantity}, ትምህርት: {education}",
+    justification: "ማብራሪያ",
+    priority: "ቅድሚያ ደረጃ",
+    high: "ከፍተኛ",
+    medium: "መካከለኛ",
+    low: "ዝቅተኛ",
+    viewFile: "ፋይል እይ",
+    downloadFile: "ፋይል አውርድ",
+    uploadProgress: "ፋይሎች በመጫን ላይ...",
+    fileUploaded: "ፋይል ተጫኗል",
   },
 };
 
@@ -126,16 +143,19 @@ const DeptHeadRequisition = () => {
   const [selectedReq, setSelectedReq] = useState(null);
   const [showApplyForm, setShowApplyForm] = useState(false);
   const [message, setMessage] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   // Form fields
   const [date, setDate] = useState("");
   const [position, setPosition] = useState("");
-  const [department, setDepartment] = useState("");
+  const [department, setDepartment] = useState(user?.department?.name || "");
   const [education, setEducation] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [term, setTerm] = useState("");
   const [sex, setSex] = useState("");
   const [experience, setExperience] = useState("");
+  const [justification, setJustification] = useState("");
+  const [priority, setPriority] = useState("medium");
   const [attachments, setAttachments] = useState([]);
 
   // Fetch requisitions
@@ -151,34 +171,13 @@ const DeptHeadRequisition = () => {
   };
 
   useEffect(() => {
-    if (!authLoading && user) fetchRequisitions();
-  }, [user, authLoading]);
-
-  // Send notification to admin
-  const sendAdminNotification = async (requisitionData) => {
-    try {
-      const notificationMessage = t.adminNotification
-        .replace("{deptHead}", `${user.firstName} ${user.lastName}`)
-        .replace("{position}", requisitionData.position)
-        .replace("{department}", requisitionData.department)
-        .replace("{quantity}", requisitionData.quantity)
-        .replace("{education}", requisitionData.education);
-
-      await axios.post("/notifications", {
-        message: notificationMessage,
-        recipientRole: "Admin",
-        type: "Requisition",
-        reference: requisitionData._id,
-        status: "pending",
-        seen: false,
-      });
-
-      return true;
-    } catch (err) {
-      console.error("Send notification error:", err);
-      return false;
+    if (!authLoading && user) {
+      fetchRequisitions();
+      // Set current date
+      const today = new Date().toISOString().split('T')[0];
+      setDate(today);
     }
-  };
+  }, [user, authLoading]);
 
   // Apply form submission
   const handleApplySubmit = async (e) => {
@@ -187,50 +186,53 @@ const DeptHeadRequisition = () => {
       setMessage(t.requiredFields);
       return;
     }
+
+    setUploading(true);
+    setMessage("");
+
     try {
       const formData = new FormData();
       formData.append("date", date);
       formData.append("position", position);
       formData.append("department", department);
       formData.append("education", education);
-      formData.append("quantity", quantity);
+      formData.append("quantity", quantity.toString());
       formData.append("term", term);
       formData.append("sex", sex);
       formData.append("experience", experience);
-      attachments.forEach((file) => formData.append("attachments", file));
+      formData.append("justification", justification);
+      formData.append("priority", priority);
+      
+      // Add each file to formData
+      attachments.forEach((file) => {
+        formData.append("attachments", file);
+      });
 
       const res = await axios.post("/requisitions", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // Send notification to admin
-      const notificationSent = await sendAdminNotification({
-        ...res.data.requisition,
-        position,
-        department,
-        education,
-        quantity,
-      });
-
-      setMessage(notificationSent ? t.submitSuccess + " - " + t.notificationSent : t.submitSuccess);
+      setMessage(t.submitSuccess);
       setShowApplyForm(false);
       resetForm();
       fetchRequisitions();
     } catch (err) {
       console.error("Apply requisition error:", err);
-      setMessage(t.submitFailed);
+      setMessage(t.submitFailed + ": " + (err.response?.data?.message || err.message));
+    } finally {
+      setUploading(false);
     }
   };
 
   const resetForm = () => {
-    setDate("");
     setPosition("");
-    setDepartment("");
     setEducation("");
     setQuantity(1);
     setTerm("");
     setSex("");
     setExperience("");
+    setJustification("");
+    setPriority("medium");
     setAttachments([]);
     setMessage("");
   };
@@ -248,14 +250,14 @@ const DeptHeadRequisition = () => {
     }
   };
 
-  const sendNotification = async (requisition) => {
-    try {
-      const notificationSent = await sendAdminNotification(requisition);
-      setMessage(notificationSent ? t.notificationSent : t.notificationFailed);
-    } catch (err) {
-      console.error("Send notification error:", err);
-      setMessage(t.notificationFailed);
-    }
+  const formatDate = (dateString) => {
+    if (!dateString) return "N/A";
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   if (authLoading || loading) {
@@ -332,7 +334,7 @@ const DeptHeadRequisition = () => {
                         ? "bg-gray-700 border-gray-600 text-gray-100" 
                         : "bg-white border-gray-300 text-gray-900"
                     }`}
-                    placeholder={language === "en" ? "e.g., Senior Developer" : "ለምሳሌ፣ ከፍተኛ መሳሪያ አሰራር"}
+                    placeholder={language === "en" ? "e.g., Lecturer, Senior Developer" : "ለምሳሌ፣ መምህር፣ ከፍተኛ መሳሪያ አሰራር"}
                   />
                 </div>
 
@@ -360,8 +362,7 @@ const DeptHeadRequisition = () => {
                     <FaGraduationCap className="text-gray-400" />
                     {t.education} *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={education}
                     onChange={(e) => setEducation(e.target.value)}
                     required
@@ -370,8 +371,14 @@ const DeptHeadRequisition = () => {
                         ? "bg-gray-700 border-gray-600 text-gray-100" 
                         : "bg-white border-gray-300 text-gray-900"
                     }`}
-                    placeholder={language === "en" ? "e.g., Bachelor's Degree" : "ለምሳሌ፣ ባችለር ዲግሪ"}
-                  />
+                  >
+                    <option value="">{t.select}</option>
+                    <option value="BSc">Bachelor's Degree (BSc)</option>
+                    <option value="MSc">Master's Degree (MSc)</option>
+                    <option value="PhD">Doctorate (PhD)</option>
+                    <option value="Diploma">Diploma</option>
+                    <option value="Certificate">Certificate</option>
+                  </select>
                 </div>
 
                 <div>
@@ -382,8 +389,9 @@ const DeptHeadRequisition = () => {
                   <input
                     type="number"
                     min="1"
+                    max="20"
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
                     required
                     className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                       darkMode 
@@ -401,8 +409,7 @@ const DeptHeadRequisition = () => {
                     <FaClock className="text-gray-400" />
                     {t.term} *
                   </label>
-                  <input
-                    type="text"
+                  <select
                     value={term}
                     onChange={(e) => setTerm(e.target.value)}
                     required
@@ -411,8 +418,14 @@ const DeptHeadRequisition = () => {
                         ? "bg-gray-700 border-gray-600 text-gray-100" 
                         : "bg-white border-gray-300 text-gray-900"
                     }`}
-                    placeholder={language === "en" ? "e.g., Permanent, Contract" : "ለምሳሌ፣ ቋሚ፣ ውል"}
-                  />
+                  >
+                    <option value="">{t.select}</option>
+                    <option value="Permanent">Permanent</option>
+                    <option value="Temporary">Temporary</option>
+                    <option value="Contract">Contract</option>
+                    <option value="FullTime">Full Time</option>
+                    <option value="PartTime">Part Time</option>
+                  </select>
                 </div>
 
                 <div>
@@ -432,6 +445,7 @@ const DeptHeadRequisition = () => {
                     <option value="">{t.select}</option>
                     <option value="Male">{t.male}</option>
                     <option value="Female">{t.female}</option>
+                    <option value="Any">Any</option>
                   </select>
                 </div>
 
@@ -472,6 +486,45 @@ const DeptHeadRequisition = () => {
                 </div>
               </div>
 
+              {/* Column 3 - Justification and Priority */}
+              <div className="space-y-4 md:col-span-2">
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {t.justification}
+                  </label>
+                  <textarea
+                    value={justification}
+                    onChange={(e) => setJustification(e.target.value)}
+                    rows="3"
+                    className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode 
+                        ? "bg-gray-700 border-gray-600 text-gray-100" 
+                        : "bg-white border-gray-300 text-gray-900"
+                    }`}
+                    placeholder={language === "en" ? "Explain why this position is needed..." : "ለምን ይህ ስራ የሚያስፈልግ ማብራሪያ ይፃፉ..."}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    {t.priority}
+                  </label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className={`w-full px-4 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      darkMode 
+                        ? "bg-gray-700 border-gray-600 text-gray-100" 
+                        : "bg-white border-gray-300 text-gray-900"
+                    }`}
+                  >
+                    <option value="low">{t.low}</option>
+                    <option value="medium">{t.medium}</option>
+                    <option value="high">{t.high}</option>
+                  </select>
+                </div>
+              </div>
+
               {/* Attachments */}
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium mb-2 flex items-center gap-2">
@@ -485,9 +538,16 @@ const DeptHeadRequisition = () => {
                   className={`w-full px-4 py-2 rounded-lg border ${darkMode ? "bg-gray-700 border-gray-600" : "bg-white border-gray-300"}`}
                 />
                 {attachments.length > 0 && (
-                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {attachments.length} {language === "en" ? "file(s) selected" : "ፋይል(ዎች) ተመርጠዋል"}
-                  </p>
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {attachments.length} {language === "en" ? "file(s) selected" : "ፋይል(ዎች) ተመርጠዋል"}:
+                    </p>
+                    <ul className="list-disc list-inside text-sm text-gray-600 dark:text-gray-400">
+                      {attachments.map((file, index) => (
+                        <li key={index}>{file.name}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             </div>
@@ -496,10 +556,20 @@ const DeptHeadRequisition = () => {
             <div className="mt-8 flex gap-3">
               <button
                 type="submit"
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                disabled={uploading}
+                className={`px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 ${uploading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <FaPaperPlane />
-                {t.submit}
+                {uploading ? (
+                  <>
+                    <FaSpinner className="animate-spin" />
+                    {t.uploadProgress}
+                  </>
+                ) : (
+                  <>
+                    <FaPaperPlane />
+                    {t.submit}
+                  </>
+                )}
               </button>
               <button
                 type="button"
@@ -536,7 +606,7 @@ const DeptHeadRequisition = () => {
                         {req.educationalLevel || req.education}
                       </div>
                     </td>
-                    <td className="p-4">{req.department}</td>
+                    <td className="p-4">{req.departmentName || req.department}</td>
                     <td className="p-4">
                       <span className={`px-2 py-1 rounded text-sm ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
                         {req.quantity}
@@ -566,15 +636,6 @@ const DeptHeadRequisition = () => {
                           <FaEye />
                           {t.viewDetails}
                         </button>
-                        {(!req.status || req.status === "pending") && (
-                          <button
-                            onClick={() => sendNotification(req)}
-                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-1 text-sm"
-                          >
-                            <FaPaperPlane />
-                            {t.sendNotification}
-                          </button>
-                        )}
                         <button
                           onClick={() => handleDelete(req._id)}
                           className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
@@ -608,7 +669,7 @@ const DeptHeadRequisition = () => {
                 <div>
                   <h2 className="text-xl font-bold">{t.requisitionDetails}</h2>
                   <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-                    {selectedReq.position} - {selectedReq.department}
+                    {selectedReq.position} - {selectedReq.departmentName || selectedReq.department}
                   </p>
                 </div>
                 <button
@@ -628,7 +689,7 @@ const DeptHeadRequisition = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.department}</p>
-                    <p className="font-medium">{selectedReq.department}</p>
+                    <p className="font-medium">{selectedReq.departmentName || selectedReq.department}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.education}</p>
@@ -638,13 +699,13 @@ const DeptHeadRequisition = () => {
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.quantity}</p>
                     <p className="font-medium">{selectedReq.quantity}</p>
                   </div>
-                </div>
-
-                <div className="space-y-4">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.term}</p>
                     <p className="font-medium">{selectedReq.termOfEmployment || selectedReq.term}</p>
                   </div>
+                </div>
+
+                <div className="space-y-4">
                   <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.sex}</p>
                     <p className="font-medium">{selectedReq.sex || "N/A"}</p>
@@ -654,26 +715,38 @@ const DeptHeadRequisition = () => {
                     <p className="font-medium">{selectedReq.experience || "N/A"}</p>
                   </div>
                   <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{t.priority}</p>
+                    <p className="font-medium capitalize">{selectedReq.priority || t.medium}</p>
+                  </div>
+                  <div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{t.createdDate}</p>
                     <p className="font-medium">
-                      {new Date(selectedReq.date || selectedReq.createdAt).toLocaleDateString()}
+                      {formatDate(selectedReq.date || selectedReq.createdAt)}
                     </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">{t.status}</p>
+                    <span className={`inline-block px-3 py-1 rounded text-sm font-medium ${
+                      selectedReq.status === "approved" 
+                        ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                        : selectedReq.status === "rejected"
+                        ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
+                        : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
+                    }`}>
+                      {selectedReq.status || t.pending}
+                    </span>
                   </div>
                 </div>
 
-                {/* Status */}
-                <div className="md:col-span-2">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{t.status}</p>
-                  <span className={`inline-block px-3 py-1 rounded text-sm font-medium ${
-                    selectedReq.status === "approved" 
-                      ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                      : selectedReq.status === "rejected"
-                      ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"
-                      : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-                  }`}>
-                    {selectedReq.status || t.pending}
-                  </span>
-                </div>
+                {/* Justification */}
+                {selectedReq.justification && (
+                  <div className="md:col-span-2">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">{t.justification}</p>
+                    <div className={`p-3 rounded ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
+                      <p className="whitespace-pre-wrap">{selectedReq.justification}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Attachments */}
                 <div className="md:col-span-2">
@@ -681,15 +754,20 @@ const DeptHeadRequisition = () => {
                   {selectedReq.attachments?.length > 0 ? (
                     <div className="space-y-2">
                       {selectedReq.attachments.map((file, idx) => (
-                        <a
-                          key={idx}
-                          href={`${BACKEND_URL}/${file}`}
-                          download
-                          className={`flex items-center gap-2 p-2 rounded ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
-                        >
-                          <FaDownload className="text-blue-500" />
-                          <span className="truncate">{file.split("/").pop()}</span>
-                        </a>
+                        <div key={idx} className={`flex items-center justify-between p-2 rounded ${darkMode ? "bg-gray-700 hover:bg-gray-600" : "bg-gray-100 hover:bg-gray-200"}`}>
+                          <div className="flex items-center gap-2">
+                            <FaFileAlt className="text-gray-500" />
+                            <span className="truncate">{file.name || file.url?.split('/').pop() || `Attachment ${idx + 1}`}</span>
+                          </div>
+                          <a
+                            href={`${BACKEND_URL}/${file.url}`}
+                            download
+                            className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 flex items-center gap-1"
+                          >
+                            <FaDownload />
+                            {t.downloadFile}
+                          </a>
+                        </div>
                       ))}
                     </div>
                   ) : (

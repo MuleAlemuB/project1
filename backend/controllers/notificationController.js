@@ -6,6 +6,7 @@ import Requisition from "../models/Requisition.js";
 import JobApplication from "../models/JobApplication.js";
 import Employee from "../models/Employee.js";
 import Vacancy from "../models/Vacancy.js";
+import Department from "../models/Department.js"; // Import Department model
 import mongoose from "mongoose";
 
 // ---------------- Get all notifications (Admin only) ----------------
@@ -18,10 +19,33 @@ export const getAllNotifications = asyncHandler(async (req, res) => {
 
   const notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } })
     .sort({ createdAt: -1 })
-    .populate("leaveRequestId");
+    .lean(); // Removed populate to avoid schema issues
 
   res.json(notifications);
 });
+
+// Helper function to get department name
+const getDepartmentName = async (departmentId) => {
+  try {
+    if (!departmentId) return "N/A";
+    
+    // If it's already a string (department name), return it
+    if (typeof departmentId === 'string' && !mongoose.Types.ObjectId.isValid(departmentId)) {
+      return departmentId;
+    }
+    
+    // If it's an ObjectId, find the department
+    if (mongoose.Types.ObjectId.isValid(departmentId)) {
+      const department = await Department.findById(departmentId).select('name').lean();
+      return department?.name || "N/A";
+    }
+    
+    return "N/A";
+  } catch (error) {
+    console.error('Error fetching department:', error.message);
+    return "N/A";
+  }
+};
 
 // ---------------- Get notifications for logged-in user ----------------
 export const getMyNotifications = asyncHandler(async (req, res) => {
@@ -59,13 +83,16 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                 };
                 enhancedNotif.vacancy = jobApplication.vacancyId;
                 
+                // Get department name
+                const departmentName = await getDepartmentName(jobApplication.vacancyId?.department);
+                
                 enhancedNotif.metadata = {
                   name: jobApplication.employeeId?.name,
                   email: jobApplication.employeeId?.email,
                   phone: jobApplication.employeeId?.phoneNumber,
                   resume: jobApplication.resume,
                   vacancyTitle: jobApplication.vacancyId?.title,
-                  department: jobApplication.vacancyId?.department,
+                  department: departmentName,
                   position: jobApplication.vacancyId?.position,
                   appliedAt: jobApplication.appliedAt
                 };
@@ -84,32 +111,41 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                 let employeeName = leave.requesterName;
                 let employeeEmail = leave.requesterEmail;
                 let employeePhone = null;
+                let employeeEmpId = null;
                 
                 if (leave.requester && mongoose.Types.ObjectId.isValid(leave.requester)) {
                   try {
                     const employee = await Employee.findById(leave.requester)
-                      .select('name email phoneNumber')
+                      .select('name email phoneNumber empId')
                       .lean();
                     if (employee) {
                       employeeName = employee.name;
                       employeeEmail = employee.email;
                       employeePhone = employee.phoneNumber;
+                      employeeEmpId = employee.empId;
                     }
                   } catch (error) {
                     console.log('Could not populate employee for leave request');
                   }
                 }
                 
+                // Get department name
+                const departmentName = await getDepartmentName(leave.department);
+                
                 enhancedNotif.leaveRequestId = leave;
                 enhancedNotif.metadata = {
                   employeeName: employeeName,
-                  department: leave.department,
+                  department: departmentName,
                   email: employeeEmail,
                   phone: employeePhone,
+                  empId: employeeEmpId,
                   startDate: leave.startDate,
                   endDate: leave.endDate,
                   reason: leave.reason,
-                  attachments: leave.attachments || []
+                  attachments: leave.attachments || [],
+                  requesterRole: leave.requesterRole,
+                  targetRole: leave.targetRole,
+                  leaveType: leave.leaveType
                 };
               } else if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
@@ -124,38 +160,58 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                 let requesterName = requisition.requestedBy;
                 let requesterEmail = requisition.requestedByEmail;
                 let requesterDepartment = requisition.department;
+                let requesterEmpId = null;
                 
                 if (requisition.requestedById && mongoose.Types.ObjectId.isValid(requisition.requestedById)) {
                   try {
                     const employee = await Employee.findById(requisition.requestedById)
-                      .select('name email department')
+                      .select('name email department empId')
                       .lean();
                     if (employee) {
                       requesterName = employee.name || requesterName;
                       requesterEmail = employee.email || requesterEmail;
                       requesterDepartment = employee.department || requesterDepartment;
+                      requesterEmpId = employee.empId;
                     }
                   } catch (error) {
                     console.log('Could not populate employee for requisition');
                   }
                 }
                 
+                // Get department name
+                const departmentName = await getDepartmentName(requesterDepartment);
+                
+                // Check if requisition has additional fields (from updated schema)
+                const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
+                const justification = requisition.justification || requisition.reason || "N/A";
+                const priority = requisition.priority || "medium";
+                
                 enhancedNotif.metadata = {
                   requesterName: requesterName,
-                  department: requesterDepartment,
-                  email: requesterEmail,
+                  department: departmentName,
+                  email: requesterEmail || "N/A",
+                  empId: requesterEmpId,
                   position: requisition.position,
-                  educationLevel: requisition.educationalLevel,
+                  educationLevel: requisition.educationalLevel || requisition.educationLevel,
                   quantity: requisition.quantity,
                   termOfEmployment: requisition.termOfEmployment,
                   sex: requisition.sex,
                   experience: requisition.experience,
-                  requestDate: requisition.date,
-                  justification: requisition.justification || "N/A",
-                  priority: requisition.priority || "medium",
-                  attachments: requisition.attachments || []
+                  requestDate: requisition.date || requisition.createdAt,
+                  justification: justification,
+                  priority: priority,
+                  attachments: hasAttachments ? requisition.attachments : []
                 };
               } else if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+
+            case "Work Experience":
+              // Handle Work Experience requests
+              // You'll need to import and use the WorkExperienceRequest model
+              // For now, we'll just pass the existing metadata
+              if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
               break;
@@ -176,8 +232,140 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
   } else if (role === "departmenthead") {
     notifications = await Notification.find({ recipientRole: "DepartmentHead" })
       .sort({ createdAt: -1 })
-      .populate("leaveRequestId");
-    res.json(notifications);
+      .lean(); // Changed from populate to lean
+    
+    // Process each notification to add detailed information for department head
+    const enhancedNotifications = await Promise.all(
+      notifications.map(async (notif) => {
+        let enhancedNotif = { ...notif };
+        
+        try {
+          switch (notif.type) {
+            case "Leave":
+              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference)
+                .lean();
+              
+              if (leave) {
+                // Try to get employee details if requester is an ObjectId
+                let employeeName = leave.requesterName;
+                let employeeEmail = leave.requesterEmail;
+                let employeePhone = null;
+                let employeeEmpId = null;
+                
+                if (leave.requester && mongoose.Types.ObjectId.isValid(leave.requester)) {
+                  try {
+                    const employee = await Employee.findById(leave.requester)
+                      .select('name email phoneNumber empId')
+                      .lean();
+                    if (employee) {
+                      employeeName = employee.name;
+                      employeeEmail = employee.email;
+                      employeePhone = employee.phoneNumber;
+                      employeeEmpId = employee.empId;
+                    }
+                  } catch (error) {
+                    console.log('Could not populate employee for leave request');
+                  }
+                }
+                
+                // Get department name
+                const departmentName = await getDepartmentName(leave.department);
+                
+                enhancedNotif.leaveRequestId = leave;
+                enhancedNotif.metadata = {
+                  employeeName: employeeName,
+                  department: departmentName,
+                  email: employeeEmail,
+                  phone: employeePhone,
+                  empId: employeeEmpId,
+                  startDate: leave.startDate,
+                  endDate: leave.endDate,
+                  reason: leave.reason,
+                  attachments: leave.attachments || [],
+                  requesterRole: leave.requesterRole,
+                  targetRole: leave.targetRole,
+                  leaveType: leave.leaveType
+                };
+              } else if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+
+            case "Requisition":
+              const requisition = await Requisition.findById(notif.reference).lean();
+              
+              if (requisition) {
+                // Get requester details
+                let requesterName = requisition.requestedBy;
+                let requesterEmail = requisition.requestedByEmail;
+                let requesterDepartment = requisition.department;
+                let requesterEmpId = null;
+                
+                if (requisition.requestedById && mongoose.Types.ObjectId.isValid(requisition.requestedById)) {
+                  try {
+                    const employee = await Employee.findById(requisition.requestedById)
+                      .select('name email department empId')
+                      .lean();
+                    if (employee) {
+                      requesterName = employee.name || requesterName;
+                      requesterEmail = employee.email || requesterEmail;
+                      requesterDepartment = employee.department || requesterDepartment;
+                      requesterEmpId = employee.empId;
+                    }
+                  } catch (error) {
+                    console.log('Could not populate employee for requisition');
+                  }
+                }
+                
+                // Get department name
+                const departmentName = await getDepartmentName(requesterDepartment);
+                
+                // Check if requisition has additional fields (from updated schema)
+                const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
+                const justification = requisition.justification || requisition.reason || "N/A";
+                const priority = requisition.priority || "medium";
+                
+                enhancedNotif.metadata = {
+                  requesterName: requesterName,
+                  department: departmentName,
+                  email: requesterEmail || "N/A",
+                  empId: requesterEmpId,
+                  position: requisition.position,
+                  educationLevel: requisition.educationalLevel || requisition.educationLevel,
+                  quantity: requisition.quantity,
+                  termOfEmployment: requisition.termOfEmployment,
+                  sex: requisition.sex,
+                  experience: requisition.experience,
+                  requestDate: requisition.date || requisition.createdAt,
+                  justification: justification,
+                  priority: priority,
+                  attachments: hasAttachments ? requisition.attachments : []
+                };
+              } else if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+
+            default:
+              // For other types, use existing metadata if available
+              if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+          }
+        } catch (error) {
+          console.error(`Error enhancing notification ${notif._id}:`, error.message);
+          // Keep original notification if error occurs
+          if (notif.metadata) {
+            enhancedNotif.metadata = notif.metadata;
+          }
+        }
+        
+        return enhancedNotif;
+      })
+    );
+
+    res.json(enhancedNotifications);
   } else if (role === "employee") {
     notifications = await Notification.find({
       $or: [
@@ -186,15 +374,62 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
       ]
     })
       .sort({ createdAt: -1 })
-      .populate("leaveRequestId");
-    res.json(notifications);
+      .lean(); // Changed from populate to lean
+    
+    // Process each notification to add detailed information for employee
+    const enhancedNotifications = await Promise.all(
+      notifications.map(async (notif) => {
+        let enhancedNotif = { ...notif };
+        
+        try {
+          switch (notif.type) {
+            case "Leave":
+              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference)
+                .lean();
+              
+              if (leave) {
+                enhancedNotif.leaveRequestId = leave;
+                enhancedNotif.metadata = {
+                  employeeName: leave.requesterName,
+                  department: leave.department,
+                  startDate: leave.startDate,
+                  endDate: leave.endDate,
+                  reason: leave.reason,
+                  status: leave.status,
+                  leaveType: leave.leaveType
+                };
+              } else if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+
+            default:
+              // For other types, use existing metadata if available
+              if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+          }
+        } catch (error) {
+          console.error(`Error enhancing notification ${notif._id}:`, error.message);
+          // Keep original notification if error occurs
+          if (notif.metadata) {
+            enhancedNotif.metadata = notif.metadata;
+          }
+        }
+        
+        return enhancedNotif;
+      })
+    );
+
+    res.json(enhancedNotifications);
   } else {
     res.status(403);
     throw new Error("User role not authorized");
   }
 });
 
-// ---------------- Mark notification as seen ----------------
+// ---------------- Mark as seen ----------------
 export const markAsSeen = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
