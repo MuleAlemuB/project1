@@ -10,7 +10,7 @@ import {
   getDeptStats,
   getEmployeeDetails,
   markNotificationRead
-} from "../controllers/deptheadController.js";
+} from "../controllers/deptHeadController.js"; // NOTE: Case-sensitive import
 import { protect, authorize } from "../middlewares/authMiddleware.js";
 import upload from "../middlewares/uploadPublicFiles.js";
 
@@ -32,7 +32,7 @@ router.put("/password", updateDeptHeadPassword);
 // ================================
 // DASHBOARD DATA ROUTES
 // ================================
-router.get("/stats", getDeptStats); // Single call for all dashboard stats
+router.get("/stats", getDeptStats);
 router.get("/employees", getDeptEmployees);
 router.get("/employees/:employeeId", getEmployeeDetails);
 router.get("/pending-leaves", getDeptPendingLeaves);

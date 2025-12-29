@@ -1,57 +1,60 @@
 import mongoose from "mongoose";
 
-const WorkExperienceRequestSchema = new mongoose.Schema(
+const workExperienceRequestSchema = new mongoose.Schema(
   {
-    employee: {
+    requester: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    roleSubmitted: {
+    requesterRole: {
       type: String,
-      enum: ["Employee", "DepartmentHead"],
+      enum: ["employee", "dept_head", "admin"], // Changed from "departmenthead" to "dept_head"
       required: true,
     },
-
+    fullName: {
+      type: String,
+      required: true,
+    },
     department: {
       type: String,
       required: true,
     },
-
     reason: {
       type: String,
       required: true,
     },
-
-    // optional attached file from employee or dept head
-    requestAttachment: {
-      type: String,
-      default: null,
+    requestDate: {
+      type: Date,
+      default: Date.now,
     },
-
     status: {
       type: String,
-      enum: ["Pending", "Approved", "Rejected"],
-      default: "Pending",
+      enum: ["pending", "approved", "rejected", "completed"],
+      default: "pending",
     },
-
-    // admin rejection explanation
-    adminDecisionReason: {
+    adminReason: {
       type: String,
       default: "",
     },
-
-    // admin uploaded letter
-    letterFile: {
-      type: String,
-      default: null,
+    letterPdf: {
+      public_id: String,
+      url: String,
     },
-
-    // generated letter link if system auto creates
-    generatedLetterLink: {
-      type: String,
-      default: null,
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    letterGeneratedDate: {
+      type: Date,
+    },
+    isGenerated: {
+      type: Boolean,
+      default: false,
+    },
+    isUploaded: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
@@ -59,5 +62,5 @@ const WorkExperienceRequestSchema = new mongoose.Schema(
 
 export default mongoose.model(
   "WorkExperienceRequest",
-  WorkExperienceRequestSchema
+  workExperienceRequestSchema
 );

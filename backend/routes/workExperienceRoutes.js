@@ -1,30 +1,39 @@
-// backend/routes/workExperienceRoutes.js
 import express from "express";
-import { protect } from "../middlewares/authMiddleware.js";
-import uploadWorkExperience from "../middlewares/uploadWorkExperience.js";
 import {
-  submitRequest,
+  createWorkExperienceRequest,
   getAllRequests,
-  rejectRequest,
-  approveWithUpload,
-  approveWithGeneratedLetter,
+  getMyRequests,
+  updateRequestStatus,
+  uploadWorkExperienceLetter,
+  generateWorkExperienceLetter,
 } from "../controllers/workExperienceController.js";
+
+
+import upload from "../middlewares/workExperienceUpload.js";
+import { protect, adminOnly } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
-// Submit request (Employee/DeptHead) with optional file
-router.post("/", protect, uploadWorkExperience.single("requestAttachment"), submitRequest);
+// Employee / DeptHead
+router.post("/", protect, createWorkExperienceRequest);
+router.get("/my", protect, getMyRequests);
 
-// Admin: Get all requests
-router.get("/", protect, getAllRequests);
+// Admin
+router.get("/", protect, adminOnly, getAllRequests);
+router.put("/:id/status", protect, adminOnly, updateRequestStatus);
+router.post(
+  "/:id/upload",
+  protect,
+  adminOnly,
+  upload.single("pdf"),
+  uploadWorkExperienceLetter
+);
+router.post(
+  "/:id/generate",
+  protect,
+  adminOnly,
+  generateWorkExperienceLetter
+);
 
-// Admin: Reject request
-router.put("/:id/reject", protect, rejectRequest);
-
-// Admin: Approve with uploaded letter
-router.put("/:id/approve/upload", protect, uploadWorkExperience.single("letterFile"), approveWithUpload);
-
-// Admin: Approve with generated letter link
-router.put("/:id/approve/generate", protect, approveWithGeneratedLetter);
 
 export default router;

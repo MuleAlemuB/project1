@@ -63,7 +63,7 @@ function App() {
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
 
         {/* Admin Routes */}
-        <Route path="/admin/*" element={<AdminLayout />}>
+        <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminDashboard />} />
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="manage-employees" element={<ManageEmployees />} />
@@ -82,7 +82,7 @@ function App() {
         </Route>
 
         {/* Dept Head Routes */}
-        <Route path="/departmenthead/*" element={<DeptHeadLayout />}>
+        <Route path="/departmenthead" element={<DeptHeadLayout />}>
           <Route index element={<DeptHeadDashboard />} />
           <Route path="dashboard" element={<DeptHeadDashboard />} />
           <Route path="profile" element={<DeptHeadProfile />} />
@@ -98,7 +98,7 @@ function App() {
         </Route>
 
         {/* Employee Routes */}
-        <Route path="/employee/*" element={<EmployeeLayout />}>
+        <Route path="/employee" element={<EmployeeLayout />}>
           <Route index element={<EmployeeDashboard />} />
           <Route path="dashboard" element={<EmployeeDashboard />} />
           <Route path="leave" element={<EmployeeLeave />} />

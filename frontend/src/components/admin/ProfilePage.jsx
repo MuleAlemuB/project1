@@ -71,7 +71,7 @@ const ProfilePage = () => {
       removePhoto: "Remove Photo",
       passwordUpdated: "Password updated successfully",
       profileUpdated: "Profile updated successfully",
-      passwordRequirements: "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
+      passwordRequirements: "Password must be at least 6 characters with uppercase, lowercase, number, and special character",
       passwordsNotMatch: "New password and confirmation do not match",
       currentPasswordWrong: "Current password is incorrect",
       loading: "Loading profile...",

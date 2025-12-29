@@ -45,7 +45,6 @@ export const getDeptHeadProfile = asyncHandler(async (req, res) => {
 // 2. GET Employees in Department
 // ================================
 export const getDeptEmployees = asyncHandler(async (req, res) => {
-  // Get the department head's profile
   const deptHead = await Employee.findById(req.user._id)
     .select("department")
     .populate("department", "_id name");
@@ -56,7 +55,6 @@ export const getDeptEmployees = asyncHandler(async (req, res) => {
 
   const deptName = deptHead.department.name;
 
-  // Find employees in the same department
   const employees = await Employee.find({
     "department.name": deptName,
     $or: [
@@ -64,7 +62,7 @@ export const getDeptEmployees = asyncHandler(async (req, res) => {
       { employeeStatus: { $exists: false } },
       { status: "Active" }
     ],
-    role: { $ne: "departmenthead" } // Exclude other department heads
+    role: { $ne: "departmenthead" }
   })
     .select("-password")
     .populate("department", "_id name")
@@ -77,7 +75,6 @@ export const getDeptEmployees = asyncHandler(async (req, res) => {
 // 3. GET Pending Leave Requests for Department
 // ================================
 export const getDeptPendingLeaves = asyncHandler(async (req, res) => {
-  // Get the department head's department
   const deptHead = await Employee.findById(req.user._id)
     .select("department")
     .populate("department", "_id name");
@@ -88,7 +85,6 @@ export const getDeptPendingLeaves = asyncHandler(async (req, res) => {
 
   const deptName = deptHead.department.name;
 
-  // Find pending leave requests for this department
   const pendingLeaves = await LeaveRequest.find({
     department: deptName,
     targetRole: "DepartmentHead",
@@ -117,13 +113,7 @@ export const getDeptNotifications = asyncHandler(async (req, res) => {
 });
 
 // ================================
-// 5. GET Department Statistics (Single Call)
-// ================================
-// ================================
-// GET Department Statistics (Fixed)
-// ================================
-// ================================
-// GET Department Statistics (Fixed)
+// 5. GET Department Statistics
 // ================================
 export const getDeptStats = asyncHandler(async (req, res) => {
   const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
@@ -135,7 +125,6 @@ export const getDeptStats = asyncHandler(async (req, res) => {
   const deptId = deptHead.department._id;
   const deptName = deptHead.department.name;
 
-  // Fix 1: Count employees by department ID
   const totalEmployees = await Employee.countDocuments({
     department: deptId,
     $or: [
@@ -145,34 +134,23 @@ export const getDeptStats = asyncHandler(async (req, res) => {
     ]
   });
 
-  // Fix 2: Check how department is stored in LeaveRequest
-  // Try both department name and department ID
   const pendingLeaves = await LeaveRequest.countDocuments({
     $or: [
-      { department: deptId },  // If stored as ObjectId
-      { department: deptName }, // If stored as string name
-      { "department._id": deptId }, // If stored as object
-      { "department.name": deptName } // If stored as object with name
+      { department: deptId },
+      { department: deptName },
+      { "department._id": deptId },
+      { "department.name": deptName }
     ],
     targetRole: "DepartmentHead",
     status: "pending"
   });
 
-  // Fix 3: Make sure we're counting unread notifications
   const notifications = await Notification.countDocuments({
     $or: [
       { recipient: req.user._id, seen: false },
       { recipientRole: "DepartmentHead", seen: false },
-      { recipientRole: "departmenthead", seen: false } // Lowercase version
+      { recipientRole: "departmenthead", seen: false }
     ]
-  });
-
-  console.log("Dept Stats Debug:", {
-    deptId,
-    deptName,
-    totalEmployees,
-    pendingLeaves,
-    notifications
   });
 
   res.status(200).json({
@@ -194,14 +172,12 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Invalid status. Use 'approved' or 'rejected'" });
   }
 
-  // Get the leave request
   const leaveRequest = await LeaveRequest.findById(leaveId);
   
   if (!leaveRequest) {
     return res.status(404).json({ message: "Leave request not found" });
   }
 
-  // Get department head's department
   const deptHead = await Employee.findById(req.user._id)
     .populate("department", "_id name");
 
@@ -209,29 +185,23 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Department not assigned" });
   }
 
-  // Check if department matches
   if (leaveRequest.department !== deptHead.department.name) {
     return res.status(403).json({ 
       message: "You can only process leave requests from your department" 
     });
   }
 
-  // Update leave status
   leaveRequest.status = status.toLowerCase();
   
-  // Add processedBy reference if your model supports it
-  // If not, you can add it to the model or use metadata
   if (leaveRequest.schema.path('processedBy')) {
     leaveRequest.processedBy = req.user._id;
     leaveRequest.processedAt = new Date();
   }
 
-  // Add admin comment to metadata or separate field
   if (adminComment) {
     if (leaveRequest.schema.path('adminComment')) {
       leaveRequest.adminComment = adminComment;
     } else {
-      // Create metadata if it doesn't exist
       leaveRequest.metadata = leaveRequest.metadata || {};
       leaveRequest.metadata.adminComment = adminComment;
     }
@@ -239,7 +209,6 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
 
   const updatedLeave = await leaveRequest.save();
 
-  // Create notification for the requester
   try {
     await Notification.create({
       recipient: leaveRequest.requester,
@@ -258,7 +227,6 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
     });
   } catch (notifErr) {
     console.error("Failed to create notification:", notifErr);
-    // Don't fail the request if notification fails
   }
 
   res.status(200).json({
@@ -319,8 +287,7 @@ export const updateDeptHeadProfile = asyncHandler(async (req, res) => {
     experience: updated.experience || "",
     contactPerson: updated.contactPerson || "",
     contactPersonAddress: updated.contactPersonAddress || "",
-    employeeStatus:
-      updated.employeeStatus || updated.status || "Active",
+    employeeStatus: updated.employeeStatus || updated.status || "Active",
   });
 });
 
@@ -331,24 +298,18 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
-    res.status(400);
-    throw new Error("Both current and new password are required");
+    return res.status(400).json({ message: "Both current and new password are required" });
   }
 
   const deptHead = await Employee.findById(req.user._id);
   if (!deptHead) {
-    res.status(404);
-    throw new Error("Department Head not found");
+    return res.status(404).json({ message: "Department Head not found" });
   }
 
-  const isMatch = await bcrypt.compare(
-    currentPassword,
-    deptHead.password
-  );
+  const isMatch = await bcrypt.compare(currentPassword, deptHead.password);
 
   if (!isMatch) {
-    res.status(400);
-    throw new Error("Current password is incorrect");
+    return res.status(400).json({ message: "Current password is incorrect" });
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -367,7 +328,6 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
 export const getEmployeeDetails = asyncHandler(async (req, res) => {
   const { employeeId } = req.params;
 
-  // Get department head's department
   const deptHead = await Employee.findById(req.user._id)
     .populate("department", "_id name");
 
@@ -377,7 +337,6 @@ export const getEmployeeDetails = asyncHandler(async (req, res) => {
 
   const deptName = deptHead.department.name;
 
-  // Find employee and ensure they're in the same department
   const employee = await Employee.findOne({
     _id: employeeId,
     "department.name": deptName
