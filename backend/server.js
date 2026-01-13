@@ -52,6 +52,8 @@ app.use(
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads directory (ADD THIS LINE)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ✅ API Routes
 app.use('/api/auth', authRoutes);

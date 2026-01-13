@@ -5,20 +5,29 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
+        // Work Experience related
+        "Work Experience Request",
+        "Work Experience Approved", 
+        "Work Experience Rejected",
+        "Work Experience Letter Generated",
+        "Work Experience Letter Uploaded",
+        
+        // Leave related
+        "Leave",
+        "EmployeeLeaveApplied",
+        
+        // General
         "Message",
         "Alert",
         "Reminder",
         "Requisition",
-        "Vacancy Application",
-        "Leave",
-        "EmployeeLeaveApplied",
-        "Work Experience Request", // added to fix validation error
+        "Vacancy Application"
       ],
       required: true,
     },
     message: { type: String, required: true },
     seen: { type: Boolean, default: false },
-    reference: { type: String }, // Generic reference field
+    reference: { type: String },
     applicant: {
       name: String,
       email: String,
@@ -35,13 +44,17 @@ const notificationSchema = new mongoose.Schema(
     },
     recipientRole: {
       type: String,
-      enum: ["Admin", "DepartmentHead", "Employee"], // Capitalized
+      enum: ["Admin", "DepartmentHead", "Employee"],
       required: true,
       default: "Admin",
     },
-    leaveRequestId: {
+    relatedId: { // Renamed from leaveRequestId to be more generic
       type: mongoose.Schema.Types.ObjectId,
-      ref: "LeaveRequest",
+      refPath: "relatedModel"
+    },
+    relatedModel: { // To specify which model the relatedId refers to
+      type: String,
+      enum: ["LeaveRequest", "WorkExperienceRequest", "TrainingRequest"],
     },
     status: {
       type: String,

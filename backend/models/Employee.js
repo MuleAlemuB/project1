@@ -10,7 +10,7 @@ const employeeSchema = mongoose.Schema(
     password: { type: String, required: true },
     department: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",  // Reference
+      ref: "Department",
       required: true
     },
     sex: { type: String, required: true },
@@ -21,7 +21,8 @@ const employeeSchema = mongoose.Schema(
     contactPersonAddress: { type: String },
     employeeStatus: { type: String },
     salary: { type: Number },
-    experience: { type: String },
+    // Change experience to start date
+    startDate: { type: Date, required: true }, // Add this field
     qualification: { type: String },
     dateOfBirth: { type: Date },
     address: { type: String },
@@ -31,5 +32,27 @@ const employeeSchema = mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Virtual field for experience
+employeeSchema.virtual('experience').get(function() {
+  if (!this.startDate) return "0 years";
+  
+  const startDate = new Date(this.startDate);
+  const currentDate = new Date();
+  
+  let years = currentDate.getFullYear() - startDate.getFullYear();
+  const monthDiff = currentDate.getMonth() - startDate.getMonth();
+  
+  // Adjust if current month is before the start month
+  if (monthDiff < 0 || (monthDiff === 0 && currentDate.getDate() < startDate.getDate())) {
+    years--;
+  }
+  
+  return `${years} years`;
+});
+
+// Ensure virtuals are included in JSON output
+employeeSchema.set('toJSON', { virtuals: true });
+employeeSchema.set('toObject', { virtuals: true });
 
 export default mongoose.model("Employee", employeeSchema);

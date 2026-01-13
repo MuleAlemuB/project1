@@ -15,6 +15,8 @@ import {
   FaExclamationTriangle,
   FaCheckCircle,
   FaTimesCircle,
+  FaBriefcase, // Add this for work experience
+  FaFileSignature, // Add this for letters
 } from "react-icons/fa";
 
 const translations = {
@@ -51,6 +53,20 @@ const translations = {
     urgent: "Urgent",
     markAllReadConfirm: "Mark all notifications as read?",
     deleteAllConfirm: "Delete all read notifications?",
+    // Add these for work experience
+    workExperience: "Work Experience",
+    workExperienceRequest: "Work Experience Request",
+    workExperienceApproved: "Work Experience Approved",
+    workExperienceRejected: "Work Experience Rejected",
+    workExperienceLetter: "Work Experience Letter",
+    workExperienceLetterGenerated: "Work Experience Letter Generated",
+    workExperienceLetterUploaded: "Work Experience Letter Uploaded",
+    downloadLetter: "Download Letter",
+    viewLetter: "View Letter",
+    adminReason: "Admin Reason",
+    createdAt: "Request Date",
+    reviewedBy: "Reviewed By",
+    downloadCertificate: "Download Certificate",
   },
   am: {
     title: "ማሳወቂያዎች",
@@ -85,6 +101,20 @@ const translations = {
     urgent: "አስቸኳይ",
     markAllReadConfirm: "ሁሉንም ማሳወቂያዎች እንደተነበቡ ምልክት ማድረግ ትፈልጋለህ?",
     deleteAllConfirm: "ሁሉንም ያልተነበቡ ማሳወቂያዎች ማጥፋት ትፈልጋለህ?",
+    // Add these for work experience
+    workExperience: "የስራ ተሞክሮ",
+    workExperienceRequest: "የስራ ተሞክሮ ጥያቄ",
+    workExperienceApproved: "የስራ ተሞክሮ ጥያቄ ተፈቅዷል",
+    workExperienceRejected: "የስራ ተሞክሮ ጥያቄ ተቀባይነት አላገኘም",
+    workExperienceLetter: "የስራ ተሞክሮ ደብዳቤ",
+    workExperienceLetterGenerated: "የስራ ተሞክሮ ደብዳቤ ተፈጥሯል",
+    workExperienceLetterUploaded: "የስራ ተሞክሮ ደብዳቤ ተሰቅሏል",
+    downloadLetter: "ደብዳቤ አውርድ",
+    viewLetter: "ደብዳቤ አሳይ",
+    adminReason: "የአስተዳዳሪ ምክንያት",
+    createdAt: "የጥያቄ ቀን",
+    reviewedBy: "በእነዚህ ተፈትኗል",
+    downloadCertificate: "ማረጋገጫ አውርድ",
   },
 };
 
@@ -96,16 +126,14 @@ const DeptHeadNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [detailsOpen, setDetailsOpen] = useState({});
-  const [activeFilter, setActiveFilter] = useState("all"); // "all" or "unread"
+  const [activeFilter, setActiveFilter] = useState("all");
 
-  // Filter notifications
   const filteredNotifications = activeFilter === "unread" 
     ? notifications.filter(n => !n.seen)
     : notifications;
 
   const unreadCount = notifications.filter(n => !n.seen).length;
 
-  // Fetch notifications function
   const fetchNotifications = async () => {
     try {
       const res = await axiosInstance.get("/notifications/my");
@@ -117,12 +145,10 @@ const DeptHeadNotifications = () => {
     }
   };
 
-  // Initial fetch
   useEffect(() => {
     if (!authLoading && user) fetchNotifications();
   }, [user, authLoading]);
 
-  // Polling every 10 seconds for new notifications
   useEffect(() => {
     if (!authLoading && user) {
       const interval = setInterval(fetchNotifications, 10000);
@@ -174,6 +200,22 @@ const DeptHeadNotifications = () => {
       setNotifications(prev => prev.filter(n => !n.seen));
     } catch (err) {
       console.error("Error deleting all read:", err);
+    }
+  };
+
+  // Handle download work experience letter
+  const handleDownloadWorkExperienceLetter = async (notification) => {
+    if (!notification.relatedId) {
+      console.error("No related ID found for work experience letter");
+      return;
+    }
+
+    try {
+      const downloadUrl = `${axiosInstance.defaults.baseURL}/work-experience/${notification.relatedId}/download`;
+      window.open(downloadUrl, '_blank');
+    } catch (error) {
+      console.error("Error downloading letter:", error);
+      alert("Failed to download certificate. Please try again.");
     }
   };
 
@@ -263,23 +305,13 @@ const DeptHeadNotifications = () => {
                 {/* Notification Header */}
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex items-start gap-3">
-                    <div className={`mt-1 p-2 rounded-lg ${notification.type === "urgent" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400" : notification.type === "Leave" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400" : "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400"}`}>
-                      {notification.type === "Leave" ? (
-                        <FaCalendarAlt className="w-4 h-4" />
-                      ) : notification.type === "Requisition" ? (
-                        <FaFileAlt className="w-4 h-4" />
-                      ) : notification.type === "urgent" ? (
-                        <FaExclamationTriangle className="w-4 h-4" />
-                      ) : (
-                        <FaBell className="w-4 h-4" />
-                      )}
+                    <div className={`mt-1 p-2 rounded-lg ${getNotificationColorClasses(notification.type, darkMode)}`}>
+                      {getNotificationIcon(notification.type)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-bold">
-                          {notification.type === "Leave" ? t.leaveRequest :
-                           notification.type === "Requisition" ? t.requisition :
-                           notification.type === "urgent" ? t.urgent : t.general}
+                          {getNotificationTypeLabel(notification.type, t)}
                         </p>
                         {!notification.seen && (
                           <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
@@ -303,6 +335,20 @@ const DeptHeadNotifications = () => {
                         <FaCheck className="w-4 h-4" />
                       </button>
                     )}
+                    
+                    {/* Download button for work experience letters */}
+                    {(notification.type === "Work Experience Letter Generated" || 
+                      notification.type === "Work Experience Letter Uploaded" ||
+                      notification.type === "Work Experience Letter") && (
+                      <button
+                        onClick={() => handleDownloadWorkExperienceLetter(notification)}
+                        className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                        title={t.downloadCertificate}
+                      >
+                        <FaFileSignature className="w-4 h-4" />
+                      </button>
+                    )}
+                    
                     <button
                       onClick={() => handleDelete(notification._id)}
                       className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
@@ -335,11 +381,9 @@ const DeptHeadNotifications = () => {
                       <div className="space-y-3">
                         {notification.type && (
                           <DetailItem
-                            icon={notification.type === "Leave" ? <FaCalendarAlt /> : 
-                                  notification.type === "Requisition" ? <FaFileAlt /> : 
-                                  notification.type === "urgent" ? <FaExclamationTriangle /> : <FaBell />}
+                            icon={getNotificationIcon(notification.type)}
                             label={t.type}
-                            value={notification.type}
+                            value={getNotificationTypeLabel(notification.type, t)}
                             darkMode={darkMode}
                           />
                         )}
@@ -354,11 +398,11 @@ const DeptHeadNotifications = () => {
                           />
                         )}
 
-                        {notification.reference && (
+                        {notification.createdAt && (
                           <DetailItem
-                            icon={<FaFileAlt />}
-                            label={t.requisitionId}
-                            value={notification.reference}
+                            icon={<FaCalendarAlt />}
+                            label={t.createdAt}
+                            value={new Date(notification.createdAt).toLocaleString()}
                             darkMode={darkMode}
                           />
                         )}
@@ -371,115 +415,81 @@ const DeptHeadNotifications = () => {
                             darkMode={darkMode}
                           />
                         )}
+
+                        {notification.adminReason && (
+                          <DetailItem
+                            icon={<FaInfoCircle />}
+                            label={t.adminReason}
+                            value={notification.adminReason}
+                            darkMode={darkMode}
+                          />
+                        )}
                       </div>
 
-                      {/* Right Column - Leave Request Details */}
-                      {notification.leaveRequestId && (
-                        <div className="space-y-3">
-                          {notification.leaveRequestId.requesterName && (
-                            <DetailItem
-                              icon={<FaUser />}
-                              label={t.employee}
-                              value={notification.leaveRequestId.requesterName}
-                              darkMode={darkMode}
-                            />
-                          )}
-                          
-                          {notification.leaveRequestId.requesterEmail && (
-                            <DetailItem
-                              icon={<FaEnvelope />}
-                              label={t.email}
-                              value={notification.leaveRequestId.requesterEmail}
-                              darkMode={darkMode}
-                            />
-                          )}
+                      {/* Right Column - Employee Details */}
+                      <div className="space-y-3">
+                        {notification.employee && notification.employee.name && (
+                          <DetailItem
+                            icon={<FaUser />}
+                            label={t.employee}
+                            value={notification.employee.name}
+                            darkMode={darkMode}
+                          />
+                        )}
+                        
+                        {notification.employee && notification.employee.email && (
+                          <DetailItem
+                            icon={<FaEnvelope />}
+                            label={t.email}
+                            value={notification.employee.email}
+                            darkMode={darkMode}
+                          />
+                        )}
 
-                          {notification.leaveRequestId.department && (
-                            <DetailItem
-                              icon={<FaBuilding />}
-                              label={t.department}
-                              value={typeof notification.leaveRequestId.department === "object" 
-                                ? notification.leaveRequestId.department.name 
-                                : notification.leaveRequestId.department}
-                              darkMode={darkMode}
-                            />
-                          )}
+                        {notification.reason && (
+                          <DetailItem
+                            icon={<FaFileAlt />}
+                            label={t.reason}
+                            value={notification.reason}
+                            darkMode={darkMode}
+                          />
+                        )}
 
-                          {notification.leaveRequestId.startDate && (
-                            <DetailItem
-                              icon={<FaCalendarAlt />}
-                              label={t.from}
-                              value={new Date(notification.leaveRequestId.startDate).toLocaleDateString()}
-                              darkMode={darkMode}
-                            />
-                          )}
-
-                          {notification.leaveRequestId.endDate && (
-                            <DetailItem
-                              icon={<FaCalendarAlt />}
-                              label={t.to}
-                              value={new Date(notification.leaveRequestId.endDate).toLocaleDateString()}
-                              darkMode={darkMode}
-                            />
-                          )}
-
-                          {notification.leaveRequestId.reason && (
-                            <DetailItem
-                              icon={<FaFileAlt />}
-                              label={t.reason}
-                              value={notification.leaveRequestId.reason}
-                              darkMode={darkMode}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* Employee Details */}
-                      {notification.employee && (
-                        <div className="space-y-3">
-                          {notification.employee.name && (
-                            <DetailItem
-                              icon={<FaUser />}
-                              label={t.employee}
-                              value={notification.employee.name}
-                              darkMode={darkMode}
-                            />
-                          )}
-                          
-                          {notification.employee.email && (
-                            <DetailItem
-                              icon={<FaEnvelope />}
-                              label={t.email}
-                              value={notification.employee.email}
-                              darkMode={darkMode}
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {/* Vacancy Details */}
-                      {notification.vacancy && (
-                        <div className="space-y-3">
-                          {notification.vacancy.title && (
-                            <DetailItem
-                              icon={<FaFileAlt />}
-                              label={t.vacancy}
-                              value={notification.vacancy.title}
-                              darkMode={darkMode}
-                            />
-                          )}
-                          
-                          {notification.vacancy.department && (
-                            <DetailItem
-                              icon={<FaBuilding />}
-                              label={t.department}
-                              value={notification.vacancy.department}
-                              darkMode={darkMode}
-                            />
-                          )}
-                        </div>
-                      )}
+                        {notification.reviewedBy && (
+                          <DetailItem
+                            icon={<FaUser />}
+                            label={t.reviewedBy}
+                            value={notification.reviewedBy}
+                            darkMode={darkMode}
+                          />
+                        )}
+                      </div>
                     </div>
+
+                    {/* Download Certificate Section for Work Experience */}
+                    {(notification.type === "Work Experience Letter Generated" || 
+                      notification.type === "Work Experience Letter Uploaded" ||
+                      notification.type === "Work Experience Letter") && (
+                      <div className="mt-4 pt-4 border-t border-gray-700 dark:border-gray-600">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-medium text-gray-700 dark:text-gray-300">
+                              {t.workExperienceLetter}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {notification.message}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleDownloadWorkExperienceLetter(notification)}
+                            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors flex items-center gap-2"
+                          >
+                            <FaFileSignature className="w-4 h-4" />
+                            {t.downloadCertificate}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -489,6 +499,55 @@ const DeptHeadNotifications = () => {
       )}
     </div>
   );
+};
+
+// Helper functions for notifications
+const getNotificationIcon = (type) => {
+  if (type?.includes("Work Experience")) {
+    return <FaBriefcase className="w-4 h-4" />;
+  } else if (type === "Leave") {
+    return <FaCalendarAlt className="w-4 h-4" />;
+  } else if (type === "Requisition") {
+    return <FaFileAlt className="w-4 h-4" />;
+  } else if (type === "urgent") {
+    return <FaExclamationTriangle className="w-4 h-4" />;
+  } else {
+    return <FaBell className="w-4 h-4" />;
+  }
+};
+
+const getNotificationColorClasses = (type, darkMode) => {
+  if (type?.includes("Work Experience")) {
+    return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400";
+  } else if (type === "urgent") {
+    return "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400";
+  } else if (type === "Leave") {
+    return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400";
+  } else if (type === "Requisition") {
+    return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400";
+  } else {
+    return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400";
+  }
+};
+
+const getNotificationTypeLabel = (type, t) => {
+  if (type?.includes("Work Experience")) {
+    if (type === "Work Experience Request") return t.workExperienceRequest;
+    if (type === "Work Experience Approved") return t.workExperienceApproved;
+    if (type === "Work Experience Rejected") return t.workExperienceRejected;
+    if (type === "Work Experience Letter Generated") return t.workExperienceLetterGenerated;
+    if (type === "Work Experience Letter Uploaded") return t.workExperienceLetterUploaded;
+    if (type === "Work Experience Letter") return t.workExperienceLetter;
+    return t.workExperience;
+  } else if (type === "Leave") {
+    return t.leaveRequest;
+  } else if (type === "Requisition") {
+    return t.requisition;
+  } else if (type === "urgent") {
+    return t.urgent;
+  } else {
+    return t.general;
+  }
 };
 
 // Helper component for detail items

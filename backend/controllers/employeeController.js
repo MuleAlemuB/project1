@@ -6,6 +6,23 @@ import Department from "../models/Department.js";
 // -------------------- Create Employee --------------------
 export const createEmployee = asyncHandler(async (req, res) => {
   const data = { ...req.body };
+  
+  // Validate that startDate is provided
+  if (!data.startDate) {
+    res.status(400);
+    throw new Error("Start date is required");
+  }
+  
+  // Convert startDate to Date object
+  if (data.startDate) {
+    data.startDate = new Date(data.startDate);
+  }
+  
+  // Remove experience field if it's being sent (to use virtual field instead)
+  if (data.experience) {
+    delete data.experience;
+  }
+  
   if (req.file) data.photo = `uploads/photos/${req.file.filename}`;
 
   const employee = await Employee.create(data);
@@ -28,8 +45,18 @@ export const getEmployeeById = asyncHandler(async (req, res) => {
 // -------------------- Update Employee --------------------
 export const updateEmployee = asyncHandler(async (req, res) => {
   const data = { ...req.body };
-if (req.file) data.photo = `uploads/photos/${req.file.filename}`;
-
+  
+  // Handle startDate conversion
+  if (data.startDate) {
+    data.startDate = new Date(data.startDate);
+  }
+  
+  // Remove experience field if it's being sent (to use virtual field instead)
+  if (data.experience) {
+    delete data.experience;
+  }
+  
+  if (req.file) data.photo = `uploads/photos/${req.file.filename}`;
 
   const employee = await Employee.findByIdAndUpdate(req.params.id, data, { new: true }).populate("department", "name");
   res.json(employee);
@@ -90,7 +117,7 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     typeOfPosition: employee.typeOfPosition,
     empId: employee.empId,
     salary: employee.salary,
-    experience: employee.experience,
+    experience: employee.experience, // This will use the virtual field automatically
     contactPerson: employee.contactPerson,
     contactPersonAddress: employee.contactPersonAddress,
     employeeStatus: employee.employeeStatus,
@@ -101,10 +128,13 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     profileCompleted: Math.round(
       ((employee.firstName && employee.lastName && employee.email) ? 100 : 50)
     ),
+    // Add startDate to dashboard if needed
+    startDate: employee.startDate,
   };
 
   res.json(dashboardData);
 });
+
 // -------------------- Employee Updates Password Only --------------------
 export const updatePassword = asyncHandler(async (req, res) => {
   const employeeId = req.user._id; // coming from authMiddleware's `protect`
@@ -130,4 +160,97 @@ export const updatePassword = asyncHandler(async (req, res) => {
   await employee.save();
 
   res.status(200).json({ message: "Password updated successfully" });
+});
+
+// -------------------- Get Employees Sorted by Experience --------------------
+// OPTIONAL: New endpoint if you need to sort employees by experience
+export const getEmployeesByExperience = asyncHandler(async (req, res) => {
+  const { sort = 'desc' } = req.query; // 'asc' or 'desc'
+  
+  const sortOrder = sort === 'asc' ? 1 : -1;
+  
+  const employees = await Employee.aggregate([
+    {
+      $addFields: {
+        experienceYears: {
+          $floor: {
+            $divide: [
+              { $subtract: [new Date(), "$startDate"] },
+              1000 * 60 * 60 * 24 * 365.25
+            ]
+          }
+        }
+      }
+    },
+    { $sort: { experienceYears: sortOrder } },
+    {
+      $lookup: {
+        from: 'departments',
+        localField: 'department',
+        foreignField: '_id',
+        as: 'department'
+      }
+    },
+    { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+    {
+      $project: {
+        password: 0,
+        'department.createdAt': 0,
+        'department.updatedAt': 0
+      }
+    }
+  ]);
+
+  res.json(employees);
+});
+
+// -------------------- Migration Helper (One-time use) --------------------
+// Use this once to migrate existing experience data to startDate
+export const migrateExperienceData = asyncHandler(async (req, res) => {
+  // Protect this endpoint - only for admin use
+  if (req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Not authorized to perform migration');
+  }
+
+  try {
+    const employees = await Employee.find({
+      $or: [
+        { startDate: { $exists: false } },
+        { startDate: null }
+      ]
+    });
+
+    let migratedCount = 0;
+
+    for (const employee of employees) {
+      // If employee has experience field, use it to calculate startDate
+      if (employee.experience) {
+        const experienceMatch = employee.experience.match(/(\d+)/);
+        if (experienceMatch) {
+          const years = parseInt(experienceMatch[1]);
+          const startDate = new Date();
+          startDate.setFullYear(startDate.getFullYear() - years);
+          
+          employee.startDate = startDate;
+          await employee.save();
+          migratedCount++;
+        }
+      } else {
+        // If no experience, set startDate to current date (0 years experience)
+        employee.startDate = new Date();
+        await employee.save();
+        migratedCount++;
+      }
+    }
+
+    res.json({
+      message: `Successfully migrated ${migratedCount} employee records`,
+      migratedCount
+    });
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500);
+    throw new Error('Migration failed: ' + error.message);
+  }
 });

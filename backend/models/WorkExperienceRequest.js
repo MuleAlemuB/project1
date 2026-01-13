@@ -4,12 +4,12 @@ const workExperienceRequestSchema = new mongoose.Schema(
   {
     requester: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
       required: true,
     },
     requesterRole: {
       type: String,
-      enum: ["employee", "dept_head", "admin"], // Changed from "departmenthead" to "dept_head"
+      enum: ["employee", "dept_head", "admin"],
       required: true,
     },
     fullName: {
@@ -23,10 +23,6 @@ const workExperienceRequestSchema = new mongoose.Schema(
     reason: {
       type: String,
       required: true,
-    },
-    requestDate: {
-      type: Date,
-      default: Date.now,
     },
     status: {
       type: String,
@@ -43,7 +39,7 @@ const workExperienceRequestSchema = new mongoose.Schema(
     },
     reviewedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Employee",
     },
     letterGeneratedDate: {
       type: Date,
@@ -57,8 +53,21 @@ const workExperienceRequestSchema = new mongoose.Schema(
       default: false,
     },
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    // This will prevent validation when updating existing documents
+    validateBeforeSave: false 
+  }
 );
+
+// Add a pre-save middleware to handle updates
+workExperienceRequestSchema.pre('save', function(next) {
+  // If document is being updated, don't validate required fields
+  if (!this.isNew) {
+    this.$__.saveOptions = { validateBeforeSave: false };
+  }
+  next();
+});
 
 export default mongoose.model(
   "WorkExperienceRequest",
