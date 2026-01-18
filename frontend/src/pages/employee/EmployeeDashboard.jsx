@@ -16,7 +16,7 @@ import axiosInstance from "../../utils/axiosInstance";
 import logo from "../../assets/logo.jpg";
 import { AuthContext } from "../../contexts/AuthContext";
 import { useSettings } from "../../contexts/SettingsContext";
-import EmployeeSidebar from "../../components/employee/EmployeeSidebar";
+
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
 
@@ -77,7 +77,7 @@ const EmployeeDashboard = () => {
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <EmployeeSidebar />
+     
 
       {/* Main Content */}
       <main className="flex-1 p-6 lg:p-8 overflow-auto">

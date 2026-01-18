@@ -22,7 +22,7 @@ const employeeSchema = mongoose.Schema(
     employeeStatus: { type: String },
     salary: { type: Number },
     // Change experience to start date
-    startDate: { type: Date, required: true }, // Add this field
+    startDate: { type: Date, required: false }, // Add this field
     qualification: { type: String },
     dateOfBirth: { type: Date },
     address: { type: String },

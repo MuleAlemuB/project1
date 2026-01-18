@@ -358,20 +358,190 @@ export const getMe = async (req, res) => {
 };
 
 export const changePassword = asyncHandler(async (req, res) => {
-  const { current, new: newPassword } = req.body;
-  const admin = await Employee.findById(req.user._id);
+  try {
+    console.log("🔐 Change password request received - Full body:", req.body);
+    console.log("🔐 Request headers auth:", req.headers.authorization ? "Present" : "Missing");
+    
+    // Get the current user from request
+    const userId = req.user?._id || req.user?.id;
+    console.log("🔐 User ID from auth:", userId);
+    
+    if (!userId) {
+      console.error("❌ No user ID in request");
+      return res.status(401).json({ message: "User not authenticated" });
+    }
 
-  if (!admin) return res.status(404).json({ message: "Admin not found" });
+    // Debug: Log all fields in request body
+    console.log("📋 All fields in req.body:", Object.keys(req.body));
+    Object.keys(req.body).forEach(key => {
+      console.log(`   ${key}: ${typeof req.body[key]} = "${req.body[key]}"`);
+    });
 
-  const isMatch = await bcrypt.compare(current, admin.password);
-  if (!isMatch)
-    return res.status(400).json({ message: "Current password is incorrect" });
+    // Support multiple field naming conventions
+    const requestBody = req.body;
+    
+    // Try to extract current password
+    const currentPassword = 
+      requestBody.current || 
+      requestBody.currentPassword || 
+      requestBody.oldPassword;
+    
+    // Try to extract new password
+    const newPassword = 
+      requestBody.new || 
+      requestBody.newPassword || 
+      requestBody.password;
+    
+    // Try to extract confirmation
+    const confirmation = 
+      requestBody.confirm || 
+      requestBody.confirmPassword || 
+      requestBody.confirmation;
 
-  const salt = await bcrypt.genSalt(10);
-  admin.password = await bcrypt.hash(newPassword, salt);
-  await admin.save();
+    console.log("📦 Extracted values:", {
+      currentPassword: currentPassword ? "Provided" : "Missing",
+      newPassword: newPassword ? "Provided" : "Missing",
+      confirmation: confirmation ? "Provided" : "Missing"
+    });
 
-  res.json({ message: "Password changed successfully" });
+    // Validate inputs
+    if (!currentPassword) {
+      return res.status(400).json({ 
+        message: "Current password is required",
+        receivedFields: Object.keys(requestBody)
+      });
+    }
+
+    if (!newPassword) {
+      return res.status(400).json({ 
+        message: "New password is required",
+        receivedFields: Object.keys(requestBody)
+      });
+    }
+
+    if (!confirmation) {
+      return res.status(400).json({ 
+        message: "Password confirmation is required",
+        receivedFields: Object.keys(requestBody)
+      });
+    }
+
+    // Compare new password with confirmation
+    console.log("🔍 Comparing passwords:", {
+      newPassword: newPassword,
+      confirmation: confirmation,
+      match: newPassword === confirmation
+    });
+
+    if (newPassword !== confirmation) {
+      return res.status(400).json({ 
+        message: "New password and confirmation do not match",
+        details: {
+          newPasswordLength: newPassword.length,
+          confirmationLength: confirmation.length,
+          newPasswordFirst10: newPassword.substring(0, 10),
+          confirmationFirst10: confirmation.substring(0, 10)
+        }
+      });
+    }
+
+    // Find admin by ID
+    console.log("👤 Looking for admin with ID:", userId);
+    const admin = await Employee.findById(userId);
+    
+    if (!admin) {
+      console.error("❌ Admin not found for ID:", userId);
+      return res.status(404).json({ message: "Admin not found" });
+    }
+
+    console.log("✅ Admin found:", {
+      email: admin.email,
+      hasPassword: !!admin.password,
+      passwordType: typeof admin.password
+    });
+
+    // Check if admin has a password
+    if (!admin.password) {
+      console.warn("⚠️ Admin has no password stored");
+      return res.status(400).json({ 
+        message: "Password cannot be changed for this account type" 
+      });
+    }
+
+    // Debug password comparison
+    console.log("🔑 Password comparison details:", {
+      inputCurrent: currentPassword,
+      storedExists: !!admin.password,
+      storedStartsWith: admin.password?.substring(0, 10) + "...",
+      isLikelyBcrypt: admin.password?.startsWith('$2')
+    });
+
+    // Compare passwords
+    const isMatch = await bcrypt.compare(String(currentPassword), String(admin.password));
+    
+    console.log("🔑 Password match result:", isMatch);
+    
+    if (!isMatch) {
+      // Try alternative comparison method if available
+      if (admin.comparePassword) {
+        const altMatch = await admin.comparePassword(currentPassword);
+        console.log("🔑 Alternative comparison result:", altMatch);
+        if (!altMatch) {
+          return res.status(400).json({ 
+            message: "Current password is incorrect",
+            hint: "Please check your current password"
+          });
+        }
+      } else {
+        return res.status(400).json({ 
+          message: "Current password is incorrect",
+          hint: "Please check your current password"
+        });
+      }
+    }
+
+    // Validate new password strength
+    if (newPassword.length < 6) {
+      return res.status(400).json({ 
+        message: "Password must be at least 6 characters long" 
+      });
+    }
+
+    // Hash new password
+    console.log("🔨 Hashing new password...");
+    const salt = await bcrypt.genSalt(10);
+    admin.password = await bcrypt.hash(newPassword, salt);
+    
+    console.log("💾 Saving admin with new password...");
+    await admin.save();
+
+    console.log("✅ Password changed successfully for admin:", admin.email);
+
+    res.json({ 
+      message: "Password changed successfully",
+      success: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("❌ Change password error:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
+    // Handle specific errors
+    if (error.message.includes("Illegal arguments")) {
+      return res.status(400).json({ 
+        message: "Invalid password format. Please check your input." 
+      });
+    }
+    
+    res.status(500).json({ 
+      message: "Server error during password change", 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // ---------------------- NEW ADDED SECTION ----------------------

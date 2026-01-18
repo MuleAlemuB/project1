@@ -1,17 +1,18 @@
+// employeeLeaveRoutes.js - UPDATED VERSION
 import express from "express";
 import { protect } from "../middlewares/authMiddleware.js";
-import multer from "multer";
 import asyncHandler from "express-async-handler";
 import { 
   createEmployeeLeaveRequest,
   getMyLeaveRequests,
   deleteLeaveRequest,
   getDeptHeadLeaveRequests,
+  deleteMyLeaveRequest,
   getPreviousLeaveRequests,
   updateEmployeeLeaveRequestStatus,
   deleteEmployeeLeaveRequest
 } from "../controllers/employeeLeaveController.js";
-import upload from "../middlewares/uploadPublicFiles.js"; // Import your existing upload middleware
+import upload from "../middlewares/uploadPublicFiles.js";
 
 const router = express.Router();
 
@@ -21,15 +22,15 @@ const router = express.Router();
 router.post(
   "/request",
   protect,
-  upload.array("attachments", 5), // Use your existing upload middleware
+  upload.array("attachments", 5),
   asyncHandler(createEmployeeLeaveRequest)
 );
 
 // Employee gets their own leave requests
-router.get("/my-requests", protect, getMyLeaveRequests);
+router.get("/my", protect, getMyLeaveRequests); // Changed from "/my-requests" to "/my"
 
 // Employee deletes their own leave request
-router.delete("/my-requests/:id", protect, deleteLeaveRequest);
+router.delete("/requests/:id", protect, deleteLeaveRequest); // Changed to match frontend
 
 // ================= DEPARTMENT HEAD ROUTES =================
 
@@ -40,9 +41,10 @@ router.get("/inbox", protect, getDeptHeadLeaveRequests);
 router.get("/previous-requests", protect, getPreviousLeaveRequests);
 
 // Department Head approves or rejects a leave request
-router.put("/:id/status", protect, updateEmployeeLeaveRequestStatus);
+router.put("/requests/:id/status", protect, updateEmployeeLeaveRequestStatus);
 
 // Department Head deletes any leave request from their department
-router.delete("/dept-head/:id", protect, deleteEmployeeLeaveRequest);
+router.delete("/requests/:id", protect, deleteEmployeeLeaveRequest); 
+router.delete("/my/:id", protect, deleteMyLeaveRequest);// Same endpoint for both employee and dept head
 
 export default router;

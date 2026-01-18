@@ -174,89 +174,119 @@ const DeptHeadLeaveRequests = () => {
   const [expandedAll, setExpandedAll] = useState(false);
 
   // Fetch all leave requests
-  const fetchRequests = async () => {
-    try {
-      const [inboxRes, myRes] = await Promise.all([
-        axios.get("/leaves/inbox"),
-        axios.get("/leaves/my"),
-      ]);
-      setEmployeeLeaves(inboxRes.data || []);
-      setMyLeaves(myRes.data || []);
-    } catch (err) {
-      console.error(err);
-      setMessage(t.decisionFailed);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // In the fetchRequests function of DeptHeadLeaveRequests.jsx
+const fetchRequests = async () => {
+  try {
+    console.log("Fetching leave requests...");
+    setLoading(true);
+    
+    // Use Promise.allSettled to handle individual failures
+    const [inboxResult, myResult] = await Promise.allSettled([
+      axios.get("/leaves/inbox"),
+      axios.get("/leaves/my"),
+    ]);
 
-  // Fetch previous (decided) leave requests
-  const fetchPreviousRequests = async () => {
-    try {
-      const response = await axios.get("/leaves/previous-requests");
-      setPreviousRequests(response.data || []);
-    } catch (err) {
-      console.error("Error fetching previous requests:", err);
-      setMessage("Failed to load previous requests");
-    }
-  };
+    console.log("Inbox result:", inboxResult);
+    console.log("My requests result:", myResult);
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchRequests();
+    // Handle inbox requests
+    if (inboxResult.status === 'fulfilled') {
+      setEmployeeLeaves(inboxResult.value.data || []);
+    } else {
+      console.error("Failed to fetch inbox:", inboxResult.reason);
+      setMessage(`Failed to load employee requests: ${inboxResult.reason.message}`);
+      setEmployeeLeaves([]);
     }
-  }, [user, authLoading]);
 
-  useEffect(() => {
+    // Handle my requests
+    if (myResult.status === 'fulfilled') {
+      setMyLeaves(myResult.value.data || []);
+    } else {
+      console.error("Failed to fetch my requests:", myResult.reason);
+      // Don't show error for my requests if user is not employee
+      setMyLeaves([]);
+    }
+
+  } catch (err) {
+    console.error("Error in fetchRequests:", err);
+    setMessage(t.decisionFailed);
+    setEmployeeLeaves([]);
+    setMyLeaves([]);
+  } finally {
+    setLoading(false);
+  }
+};
+
+// Also update the useEffect to handle errors better:
+useEffect(() => {
+  if (!authLoading && user) {
+    console.log("User loaded:", user);
+    fetchRequests();
+  } else if (!authLoading && !user) {
+    console.log("No user found");
+    setLoading(false);
+  }
+}, [user, authLoading]);
+
+// In the handleDecision function
+const handleDecision = async (id, status) => {
+  try {
+    console.log(`Updating request ${id} to status: ${status}`);
+    
+    await axios.put(`/leaves/requests/${id}/status`, { status });
+    setMessage(`${t.decisionSuccess} - Request ${status}`);
+    
+    // Wait a bit for database to update
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // IMPORTANT: Refresh BOTH lists
+    await fetchRequests(); // This reloads inbox (pending requests)
+    
+    if (showPreviousRequests) {
+      // Force refresh previous requests
+      await fetchPreviousRequests();
+    } else {
+      // If previous requests tab is not open, still fetch in background
+      // so it's ready when user opens it
+      fetchPreviousRequests().catch(err => 
+        console.log("Background fetch of previous requests failed:", err)
+      );
+    }
+    
+  } catch (err) {
+    console.error("Error updating status:", err.response?.data || err.message);
+    setMessage(`${t.decisionFailed}: ${err.response?.data?.message || err.message}`);
+  }
+};
+
+// In the handleDelete function (for pending requests)
+const handleDelete = async (id) => {
+  if (!window.confirm(t.deleteConfirm)) return;
+  try {
+    await axios.delete(`/leaves/requests/${id}`); // This should work now
+    setMessage(t.deleteSuccess);
+    fetchRequests();
     if (showPreviousRequests) {
       fetchPreviousRequests();
     }
-  }, [showPreviousRequests]);
+  } catch (err) {
+    console.error("Error deleting request:", err.response?.data || err.message);
+    setMessage(t.deleteFailed);
+  }
+};
 
-  // Approve / Reject
-  const handleDecision = async (id, status) => {
-    try {
-      await axios.put(`/leaves/requests/${id}/status`, { status });
-      setMessage(t.decisionSuccess);
-      fetchRequests();
-      if (showPreviousRequests) {
-        fetchPreviousRequests();
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage(t.decisionFailed);
-    }
-  };
-
-  // Delete leave request
-  const handleDelete = async (id) => {
-    if (!window.confirm(t.deleteConfirm)) return;
-    try {
-      await axios.delete(`/leaves/requests/${id}`);
-      setMessage(t.deleteSuccess);
-      fetchRequests();
-      if (showPreviousRequests) {
-        fetchPreviousRequests();
-      }
-    } catch (err) {
-      console.error(err);
-      setMessage(t.deleteFailed);
-    }
-  };
-
-  // Delete previous leave request
-  const handleDeletePrevious = async (id) => {
-    if (!window.confirm(t.deleteConfirm)) return;
-    try {
-      await axios.delete(`/leaves/requests/${id}`);
-      setMessage(t.deleteSuccess);
-      fetchPreviousRequests();
-    } catch (err) {
-      console.error(err);
-      setMessage(t.deleteFailed);
-    }
-  };
-
+// In the handleDeletePrevious function
+const handleDeletePrevious = async (id) => {
+  if (!window.confirm(t.deleteConfirm)) return;
+  try {
+    await axios.delete(`/leaves/requests/${id}`); // Same endpoint
+    setMessage(t.deleteSuccess);
+    fetchPreviousRequests();
+  } catch (err) {
+    console.error("Error deleting previous request:", err.response?.data || err.message);
+    setMessage(t.deleteFailed);
+  }
+};
   // Apply new leave
   const handleApplySubmit = async (e) => {
     e.preventDefault();
@@ -267,7 +297,7 @@ const DeptHeadLeaveRequests = () => {
     attachments.forEach((f) => formData.append("attachments", f));
 
     try {
-      await axios.post("/leaves/requests", formData, {
+      await axios.post("/leaves/request", formData, { // Fixed endpoint
         headers: { "Content-Type": "multipart/form-data" },
       });
       setMessage(t.leaveSubmitted);
@@ -362,6 +392,7 @@ const DeptHeadLeaveRequests = () => {
     );
   }
 
+  // Show only pending requests by default, or all if showAll is true
   const filteredEmployeeLeaves = showAll
     ? employeeLeaves
     : employeeLeaves.filter((r) => r.status === "pending");
@@ -387,14 +418,22 @@ const DeptHeadLeaveRequests = () => {
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => { setActiveTab("employee"); setShowApplyForm(false); setShowPreviousRequests(false); }}
+            onClick={() => { 
+              setActiveTab("employee"); 
+              setShowApplyForm(false); 
+              setShowPreviousRequests(false); 
+            }}
             className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${activeTab === "employee" ? "bg-blue-600 text-white" : darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
           >
             <FaList />
             {t.employeeRequests}
           </button>
           <button
-            onClick={() => { setActiveTab("myLeave"); setShowApplyForm(true); setShowPreviousRequests(false); }}
+            onClick={() => { 
+              setActiveTab("myLeave"); 
+              setShowApplyForm(true); 
+              setShowPreviousRequests(false); 
+            }}
             className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${activeTab === "myLeave" ? "bg-blue-600 text-white" : darkMode ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"}`}
           >
             <FaHistory />
@@ -737,7 +776,7 @@ const DeptHeadLeaveRequests = () => {
                               {request.attachments.map((file, index) => (
                                 <a
                                   key={index}
-                                  href={`${BACKEND_URL}/${file}`}
+                                  href={typeof file === 'object' ? file.url : `${BACKEND_URL}/${file}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className={`px-3 py-2 rounded flex items-center gap-2 text-sm ${
@@ -747,7 +786,7 @@ const DeptHeadLeaveRequests = () => {
                                   }`}
                                 >
                                   <FaFileAlt />
-                                  {file.split("/").pop()}
+                                  {typeof file === 'object' ? file.name : file.split("/").pop()}
                                 </a>
                               ))}
                             </div>
@@ -917,7 +956,7 @@ const DeptHeadLeaveRequests = () => {
                                     {request.attachments.map((file, index) => (
                                       <a
                                         key={index}
-                                        href={`${BACKEND_URL}/${file}`}
+                                        href={typeof file === 'object' ? file.url : `${BACKEND_URL}/${file}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className={`px-3 py-1 rounded flex items-center gap-2 text-sm ${
@@ -927,7 +966,7 @@ const DeptHeadLeaveRequests = () => {
                                         }`}
                                       >
                                         <FaFileAlt />
-                                        {file.split("/").pop()}
+                                        {typeof file === 'object' ? file.name : file.split("/").pop()}
                                       </a>
                                     ))}
                                   </div>

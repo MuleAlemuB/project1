@@ -11,10 +11,14 @@ const workExperienceRequestSchema = new mongoose.Schema(
       type: String,
       enum: ["employee", "dept_head", "admin"],
       required: true,
+      default: "employee"
     },
     fullName: {
       type: String,
-      required: true,
+      // Remove required: true since we'll populate it from employee
+    },
+    empId: {
+      type: String, // Add empId field
     },
     department: {
       type: String,
@@ -23,6 +27,9 @@ const workExperienceRequestSchema = new mongoose.Schema(
     reason: {
       type: String,
       required: true,
+    },
+    requestLetter: { // Add this field for uploaded request letters
+      type: String,
     },
     status: {
       type: String,
@@ -54,20 +61,50 @@ const workExperienceRequestSchema = new mongoose.Schema(
     },
   },
   { 
-    timestamps: true,
-    // This will prevent validation when updating existing documents
-    validateBeforeSave: false 
+    timestamps: true
   }
 );
 
-// Add a pre-save middleware to handle updates
-workExperienceRequestSchema.pre('save', function(next) {
-  // If document is being updated, don't validate required fields
-  if (!this.isNew) {
-    this.$__.saveOptions = { validateBeforeSave: false };
+// Middleware to auto-populate fullName and empId before saving
+workExperienceRequestSchema.pre('save', async function(next) {
+  try {
+    // Only populate if requester is set and fullName/empId are not already set
+    if (this.requester && (!this.fullName || !this.empId)) {
+      const Employee = mongoose.model("Employee");
+      const employee = await Employee.findById(this.requester);
+      
+      if (employee) {
+        // Construct full name
+        this.fullName = `${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`.trim();
+        this.empId = employee.empId;
+        
+        // If department is not set, get it from employee
+        if (!this.department && employee.department) {
+          // If department is a reference, populate it
+          if (mongoose.Types.ObjectId.isValid(employee.department)) {
+            const Department = mongoose.model("Department");
+            const dept = await Department.findById(employee.department);
+            this.department = dept ? dept.name : "Software Engineering";
+          } else {
+            this.department = employee.department;
+          }
+        }
+      }
+    }
+    next();
+  } catch (error) {
+    next(error);
   }
-  next();
 });
+
+// Virtual for formatted status
+workExperienceRequestSchema.virtual('statusFormatted').get(function() {
+  return this.status.charAt(0).toUpperCase() + this.status.slice(1);
+});
+
+// Ensure virtuals are included in JSON
+workExperienceRequestSchema.set('toJSON', { virtuals: true });
+workExperienceRequestSchema.set('toObject', { virtuals: true });
 
 export default mongoose.model(
   "WorkExperienceRequest",

@@ -17,11 +17,16 @@ import Department from "../models/Department.js";
  * @route  POST /api/work-experience
  * @access Employee / DepartmentHead
  */
+/**
+ * @desc   Create work experience request
+ * @route  POST /api/work-experience
+ * @access Employee / DepartmentHead
+ */
 export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   console.log('📥 Request body:', req.body);
   console.log('📁 Request file:', req.file);
   
-  // Check if body is empty (might be multipart/form-data issue)
+  // Check if body is empty
   if (Object.keys(req.body).length === 0) {
     res.status(400);
     throw new Error("Request body is empty. Please check your form data.");
@@ -35,14 +40,23 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   }
 
   // Get employee details
-  const employee = await Employee.findById(req.user._id);
+  const employee = await Employee.findById(req.user._id).populate('department', 'name');
   if (!employee) {
     res.status(404);
     throw new Error("Employee not found");
   }
 
-  // Create full name
-  const fullName = `${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`;
+  // Get department name
+  let departmentName = department;
+  if (!departmentName) {
+    if (employee.department) {
+      departmentName = typeof employee.department === 'object' 
+        ? employee.department.name 
+        : employee.department;
+    } else {
+      departmentName = "Software Engineering";
+    }
+  }
 
   // Handle request letter file if uploaded
   let requestLetterPath = null;
@@ -50,23 +64,31 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
     requestLetterPath = `/uploads/request-letters/${req.file.filename}`;
   }
 
+  // Create the request - fullName and empId will be auto-populated by middleware
   const request = await WorkExperienceRequest.create({
     requester: req.user._id,
     requesterRole: req.user.role,
-    fullName: fullName.trim(),
-    department: department || employee.department,
+    department: departmentName,
     reason,
     requestLetter: requestLetterPath
   });
 
-  // Find admins (employees with role "admin")
+  // Let the middleware populate fullName and empId, then re-fetch to get populated data
+  const populatedRequest = await WorkExperienceRequest.findById(request._id)
+    .populate({
+      path: "requester",
+      select: "firstName middleName lastName email empId"
+    });
+
+  // Get full name for notifications
+  const fullName = populatedRequest.fullName || 
+    `${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`.trim();
+
+  // Find admins
   const admins = await Employee.find({ role: "admin" });
   
-  // Create notifications ONLY for admins
-  const notificationPromises = [];
-
-  // Notifications for admins
-  const adminNotificationPromises = admins.map(admin =>
+  // Create notifications for admins
+  const notificationPromises = admins.map(admin =>
     Notification.create({
       type: "Work Experience Request",
       message: `${fullName} has requested a work experience letter`,
@@ -76,7 +98,7 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
         email: employee.email,
         empId: employee.empId
       },
-      recipientRole: "Admin", // ✅ Only send to Admin
+      recipientRole: "Admin",
       relatedId: request._id,
       relatedModel: "WorkExperienceRequest",
       status: "pending",
@@ -84,7 +106,7 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
         employeeName: fullName,
         employeeEmail: employee.email,
         employeeEmpId: employee.empId,
-        department: employee.department,
+        department: departmentName,
         reason: reason,
         createdAt: request.createdAt,
         status: "pending",
@@ -93,12 +115,11 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
     })
   );
 
-  notificationPromises.push(...adminNotificationPromises);
   await Promise.all(notificationPromises);
 
   res.status(201).json({
     success: true,
-    data: request,
+    data: populatedRequest,
   });
 });
 /**
@@ -154,16 +175,26 @@ export const getMyRequests = asyncHandler(async (req, res) => {
   const requests = await WorkExperienceRequest.find({
     requester: req.user._id,
   })
-    .populate({
-      path: "requester",
-      select: "firstName middleName lastName email empId",
-    })
-    .sort({ createdAt: -1 });
+  .sort({ createdAt: -1 });
+
+  // Format response
+  const formattedRequests = requests.map(request => {
+    // Calculate work experience from the employee's startDate if available
+    let experience = "N/A";
+    
+    // If you need to include employee info in each request, you can fetch it separately
+    // or rely on the frontend to get it from the user context
+    
+    return {
+      ...request.toObject(),
+      // You can add additional fields here if needed
+    };
+  });
 
   res.json({
     success: true,
-    count: requests.length,
-    data: requests,
+    count: formattedRequests.length,
+    data: formattedRequests,
   });
 });
 

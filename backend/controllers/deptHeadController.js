@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import asyncHandler from "express-async-handler";
 
 // ================================
-// 1. GET Department Head Profile
+// 1. GET Department Head Profile (UPDATED)
 // ================================
 export const getDeptHeadProfile = asyncHandler(async (req, res) => {
   const deptHead = await Employee.findById(req.user._id)
@@ -24,6 +24,7 @@ export const getDeptHeadProfile = asyncHandler(async (req, res) => {
     lastName: deptHead.lastName || "",
     email: deptHead.email,
     phone: deptHead.phone || deptHead.phoneNumber || "",
+    phoneNumber: deptHead.phoneNumber || deptHead.phone || "",
     department: {
       _id: deptHead.department?._id,
       name: deptHead.department?.name,
@@ -35,9 +36,15 @@ export const getDeptHeadProfile = asyncHandler(async (req, res) => {
     typeOfPosition: deptHead.typeOfPosition || "Department Head",
     salary: deptHead.salary || "",
     experience: deptHead.experience || "",
+    qualification: deptHead.qualification || "",
     contactPerson: deptHead.contactPerson || "",
     contactPersonAddress: deptHead.contactPersonAddress || "",
     employeeStatus: deptHead.employeeStatus || deptHead.status || "Active",
+    dateOfBirth: deptHead.dateOfBirth || "",
+    maritalStatus: deptHead.maritalStatus || "",
+    sex: deptHead.sex || "",
+    termOfEmployment: deptHead.termOfEmployment || "",
+    status: deptHead.status || deptHead.employeeStatus || "Active",
   });
 });
 
@@ -230,16 +237,31 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json({
+    success: true,
     message: `Leave request ${status} successfully`,
-    leave: updatedLeave
+    data: updatedLeave
   });
 });
 
 // ================================
-// 7. UPDATE Department Head Profile
+// 7. UPDATE Department Head Profile (UPDATED)
 // ================================
 export const updateDeptHeadProfile = asyncHandler(async (req, res) => {
-  const { username, email, phone, address, password } = req.body;
+  const { 
+    firstName, 
+    middleName, 
+    lastName, 
+    phoneNumber, 
+    address, 
+    dateOfBirth, 
+    contactPerson, 
+    contactPersonAddress,
+    maritalStatus,
+    sex,
+    termOfEmployment,
+    employeeStatus,
+    typeOfPosition
+  } = req.body;
 
   const deptHead = await Employee.findById(req.user._id).populate(
     "department",
@@ -247,47 +269,65 @@ export const updateDeptHeadProfile = asyncHandler(async (req, res) => {
   );
 
   if (!deptHead) {
-    return res.status(404).json({ message: "Department Head not found" });
+    return res.status(404).json({ success: false, message: "Department Head not found" });
   }
 
-  deptHead.username = username || deptHead.username;
-  deptHead.email = email || deptHead.email;
-  deptHead.phone = phone || deptHead.phone;
-  deptHead.address = address || deptHead.address;
-
-  if (password) {
-    const salt = await bcrypt.genSalt(10);
-    deptHead.password = await bcrypt.hash(password, salt);
+  // Update allowed fields (excluding non-editable ones)
+  if (firstName !== undefined) deptHead.firstName = firstName;
+  if (middleName !== undefined) deptHead.middleName = middleName;
+  if (lastName !== undefined) deptHead.lastName = lastName;
+  if (phoneNumber !== undefined) {
+    deptHead.phoneNumber = phoneNumber;
+    deptHead.phone = phoneNumber; // Update both for compatibility
   }
-
-  if (req.file) {
-    deptHead.photo = req.file.path;
+  if (address !== undefined) deptHead.address = address;
+  if (dateOfBirth !== undefined) deptHead.dateOfBirth = dateOfBirth;
+  if (contactPerson !== undefined) deptHead.contactPerson = contactPerson;
+  if (contactPersonAddress !== undefined) deptHead.contactPersonAddress = contactPersonAddress;
+  if (maritalStatus !== undefined) deptHead.maritalStatus = maritalStatus;
+  if (sex !== undefined) deptHead.sex = sex;
+  if (termOfEmployment !== undefined) deptHead.termOfEmployment = termOfEmployment;
+  if (employeeStatus !== undefined) {
+    deptHead.employeeStatus = employeeStatus;
+    deptHead.status = employeeStatus; // Update both for compatibility
   }
+  if (typeOfPosition !== undefined) deptHead.typeOfPosition = typeOfPosition;
 
   const updated = await deptHead.save();
 
   res.status(200).json({
-    _id: updated._id,
-    username: updated.username,
-    firstName: updated.firstName || "",
-    middleName: updated.middleName || "",
-    lastName: updated.lastName || "",
-    email: updated.email,
-    phone: updated.phone || "",
-    department: {
-      _id: updated.department?._id,
-      name: updated.department?.name,
-    },
-    address: updated.address || "",
-    role: updated.role,
-    photo: updated.photo || "",
-    empId: updated.empId || "",
-    typeOfPosition: updated.typeOfPosition || "Department Head",
-    salary: updated.salary || "",
-    experience: updated.experience || "",
-    contactPerson: updated.contactPerson || "",
-    contactPersonAddress: updated.contactPersonAddress || "",
-    employeeStatus: updated.employeeStatus || updated.status || "Active",
+    success: true,
+    message: "Profile updated successfully",
+    data: {
+      _id: updated._id,
+      username: updated.username,
+      firstName: updated.firstName || "",
+      middleName: updated.middleName || "",
+      lastName: updated.lastName || "",
+      email: updated.email,
+      phone: updated.phone || "",
+      phoneNumber: updated.phoneNumber || "",
+      department: {
+        _id: updated.department?._id,
+        name: updated.department?.name,
+      },
+      address: updated.address || "",
+      role: updated.role,
+      photo: updated.photo || "",
+      empId: updated.empId || "",
+      typeOfPosition: updated.typeOfPosition || "Department Head",
+      salary: updated.salary || "",
+      experience: updated.experience || "",
+      qualification: updated.qualification || "",
+      contactPerson: updated.contactPerson || "",
+      contactPersonAddress: updated.contactPersonAddress || "",
+      employeeStatus: updated.employeeStatus || updated.status || "Active",
+      dateOfBirth: updated.dateOfBirth || "",
+      maritalStatus: updated.maritalStatus || "",
+      sex: updated.sex || "",
+      termOfEmployment: updated.termOfEmployment || "",
+      status: updated.status || updated.employeeStatus || "Active",
+    }
   });
 });
 
@@ -298,18 +338,24 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {
-    return res.status(400).json({ message: "Both current and new password are required" });
+    return res.status(400).json({ 
+      success: false,
+      message: "Both current and new password are required" 
+    });
   }
 
   const deptHead = await Employee.findById(req.user._id);
   if (!deptHead) {
-    return res.status(404).json({ message: "Department Head not found" });
+    return res.status(404).json({ success: false, message: "Department Head not found" });
   }
 
   const isMatch = await bcrypt.compare(currentPassword, deptHead.password);
 
   if (!isMatch) {
-    return res.status(400).json({ message: "Current password is incorrect" });
+    return res.status(400).json({ 
+      success: false, 
+      message: "Current password is incorrect" 
+    });
   }
 
   const salt = await bcrypt.genSalt(10);
@@ -318,6 +364,7 @@ export const updateDeptHeadPassword = asyncHandler(async (req, res) => {
   await deptHead.save();
 
   res.status(200).json({
+    success: true,
     message: "Password updated successfully",
   });
 });
@@ -380,4 +427,203 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
     message: "Notification marked as read",
     notification
   });
+});
+// ================================
+// UPDATE Employee by Department Head
+// ================================
+export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  // Get department head's department
+  const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
+  
+  if (!deptHead.department) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Department not assigned" 
+    });
+  }
+  
+  const deptName = deptHead.department.name;
+  
+  // Find employee in the same department
+  const employee = await Employee.findOne({
+    _id: id,
+    "department.name": deptName
+  });
+  
+  if (!employee) {
+    return res.status(404).json({ 
+      success: false, 
+      message: "Employee not found in your department" 
+    });
+  }
+  
+  // Only allow specific fields to be updated by department head
+  const allowedUpdates = {
+    firstName: req.body.firstName,
+    middleName: req.body.middleName,
+    lastName: req.body.lastName,
+    phoneNumber: req.body.phoneNumber,
+    sex: req.body.sex,
+    typeOfPosition: req.body.typeOfPosition,
+    termOfEmployment: req.body.termOfEmployment,
+    contactPerson: req.body.contactPerson,
+    contactPersonAddress: req.body.contactPersonAddress,
+    employeeStatus: req.body.employeeStatus,
+    dateOfBirth: req.body.dateOfBirth,
+    address: req.body.address,
+    maritalStatus: req.body.maritalStatus,
+  };
+  
+  // Remove undefined fields
+  Object.keys(allowedUpdates).forEach(key => {
+    if (allowedUpdates[key] !== undefined) {
+      employee[key] = allowedUpdates[key];
+    }
+  });
+  
+  const updatedEmployee = await employee.save();
+  
+  // Create notification for the update
+  await Notification.create({
+    type: "Employee Updated",
+    message: `Employee ${updatedEmployee.firstName} ${updatedEmployee.lastName} has been updated by department head`,
+    recipient: updatedEmployee._id,
+    recipientRole: "Employee",
+    sender: req.user._id,
+    senderRole: "departmenthead",
+    metadata: {
+      employeeId: updatedEmployee._id,
+      updatedBy: req.user._id,
+      updatedFields: Object.keys(allowedUpdates).filter(key => allowedUpdates[key] !== undefined)
+    }
+  });
+  
+  res.status(200).json({
+    success: true,
+    message: "Employee updated successfully",
+    data: updatedEmployee
+  });
+});
+
+// ================================
+// DELETE Employee by Department Head
+// ================================
+export const deleteEmployeeByDeptHead = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  
+  // Get department head's department
+  const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
+  
+  if (!deptHead.department) {
+    return res.status(400).json({ 
+      success: false, 
+      message: "Department not assigned" 
+    });
+  }
+  
+  const deptName = deptHead.department.name;
+  
+  // Find employee in the same department
+  const employee = await Employee.findOne({
+    _id: id,
+    "department.name": deptName
+  });
+  
+  if (!employee) {
+    return res.status(404).json({ 
+      success: false, 
+      message: "Employee not found in your department" 
+    });
+  }
+  
+  // Soft delete - mark as terminated
+  employee.employeeStatus = "Terminated";
+  employee.status = "Terminated";
+  await employee.save();
+  
+  // Create notification for the deletion
+  await Notification.create({
+    type: "Employee Terminated",
+    message: `Employee ${employee.firstName} ${employee.lastName} has been terminated by department head`,
+    recipient: employee._id,
+    recipientRole: "Employee",
+    sender: req.user._id,
+    senderRole: "departmenthead",
+    metadata: {
+      employeeId: employee._id,
+      terminatedBy: req.user._id,
+      terminationDate: new Date()
+    }
+  });
+  
+  res.status(200).json({
+    success: true,
+    message: "Employee terminated successfully",
+    data: { id: employee._id, status: "Terminated" }
+  });
+});
+export const updateDeptHeadPhoto = asyncHandler(async (req, res) => {
+  try {
+    const deptHead = await Employee.findById(req.user._id);
+    
+    if (!deptHead) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Department Head not found" 
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Please upload a photo" 
+      });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid file type. Only JPG, PNG, and GIF are allowed" 
+      });
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (req.file.size > maxSize) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "File size too large. Maximum size is 5MB" 
+      });
+    }
+
+    // Save the file path (adjust based on your storage setup)
+    // Option 1: If using cloud storage (Cloudinary, S3, etc.)
+    // const result = await uploadToCloud(req.file);
+    // deptHead.photo = result.secure_url;
+
+    // Option 2: If storing locally
+    const photoPath = `/uploads/employees/${req.file.filename}`;
+    deptHead.photo = photoPath;
+
+    await deptHead.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Photo uploaded successfully",
+      photoUrl: deptHead.photo
+    });
+
+  } catch (error) {
+    console.error("Photo upload error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to upload photo",
+      error: error.message 
+    });
+  }
 });

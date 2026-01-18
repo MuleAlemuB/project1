@@ -67,8 +67,14 @@ export const deleteLeaveRequest = asyncHandler(async (req, res) => {
     throw new Error("Leave request not found");
   }
 
-  // Only allow owner to delete
-  if (leave.requester.toString() !== req.user._id.toString()) {
+  const user = req.user;
+  
+  // Check authorization: Either owner OR department head of same department
+  const isOwner = leave.requester.toString() === user._id.toString();
+  const isDeptHead = user.role.toLowerCase() === "departmenthead";
+  const sameDepartment = leave.department === (user.department?.name || user.department);
+
+  if (!isOwner && !(isDeptHead && sameDepartment)) {
     res.status(403);
     throw new Error("Not authorized to delete this leave request");
   }
@@ -77,32 +83,53 @@ export const deleteLeaveRequest = asyncHandler(async (req, res) => {
   res.json({ message: "Leave request deleted" });
 });
 
+
 // For Department Head - Get leave requests (pending ones)
 export const getDeptHeadLeaveRequests = asyncHandler(async (req, res) => {
   const deptName = req.user.department?.name || req.user.department;
+  console.log("Fetching inbox requests for department:", deptName);
 
+  // Only show pending requests in inbox
   const requests = await LeaveRequest.find({
-    targetRole: "DepartmentHead",
     department: deptName,
-    status: "pending" // Usually dept head sees pending requests
+    $or: [
+      { targetRole: "DepartmentHead" },
+      { requesterModel: "Employee" }
+    ],
+    status: "pending" // ONLY PENDING
   }).sort({ createdAt: -1 });
 
+  console.log(`Found ${requests.length} pending requests`);
+  
   res.json(requests);
 });
 
-// NEW ENDPOINT: For Department Head - Get previous/decided leave requests
+// In getPreviousLeaveRequests function:
+
 export const getPreviousLeaveRequests = asyncHandler(async (req, res) => {
+  // Check if user is department head
+  if (req.user.role.toLowerCase() !== "departmenthead") {
+    res.status(403);
+    throw new Error("Not authorized");
+  }
+
   const deptName = req.user.department?.name || req.user.department;
+  console.log("Fetching previous requests for department:", deptName);
 
+  // Get ALL requests for this department (not just pending)
   const requests = await LeaveRequest.find({
-    targetRole: "DepartmentHead",
     department: deptName,
-    status: { $in: ["approved", "rejected"] } // Only approved or rejected
-  }).sort({ updatedAt: -1 }); // Sort by decision date (updatedAt)
+    $or: [
+      { targetRole: "DepartmentHead" },
+      { requesterModel: "Employee" } // Also include employee requests
+    ],
+    status: { $in: ["approved", "rejected"] }
+  }).sort({ updatedAt: -1 });
 
+  console.log(`Found ${requests.length} previous requests`);
+  
   res.json(requests);
 });
-
 // For Department Head - Update status
 export const updateEmployeeLeaveRequestStatus = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -181,4 +208,39 @@ export const deleteEmployeeLeaveRequest = asyncHandler(async (req, res) => {
 
   await leaveRequest.deleteOne();
   res.json({ message: "Leave request deleted successfully" });
+});
+export const deleteMyLeaveRequest = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const employee = req.user;
+
+  console.log("Employee trying to delete leave request:", {
+    employeeId: employee._id,
+    requestId: id
+  });
+
+  const leaveRequest = await LeaveRequest.findById(id);
+  
+  if (!leaveRequest) {
+    res.status(404);
+    throw new Error("Leave request not found");
+  }
+
+  // Check if the employee is the owner of this request
+  if (leaveRequest.requester.toString() !== employee._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorized to delete this leave request");
+  }
+
+  // Only allow deletion if status is pending
+  if (leaveRequest.status !== "pending") {
+    res.status(400);
+    throw new Error("Only pending leave requests can be deleted");
+  }
+
+  await leaveRequest.deleteOne();
+  
+  res.json({ 
+    message: "Leave request deleted successfully",
+    deleted: true
+  });
 });

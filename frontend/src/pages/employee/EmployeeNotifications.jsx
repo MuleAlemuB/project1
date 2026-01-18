@@ -12,13 +12,15 @@ import {
   FaEnvelope,
   FaInfoCircle
 } from "react-icons/fa";
-import EmployeeSidebar from "../../components/employee/EmployeeSidebar";
+
 import axiosInstance from "../../utils/axiosInstance";
 import { useSettings } from "../../contexts/SettingsContext";
 import { toast } from "react-toastify";
+import { useAuth } from "../../contexts/AuthContext"; // Added import
 
 const EmployeeNotifications = () => {
   const { language, darkMode } = useSettings();
+  const { user } = useAuth(); // Get current user
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedNotification, setSelectedNotification] = useState(null);
@@ -27,15 +29,42 @@ const EmployeeNotifications = () => {
 
   useEffect(() => {
     fetchNotifications();
-  }, [language]);
+  }, [language, user]); // Added user dependency
 
   const fetchNotifications = async () => {
     try {
       setLoading(true);
       const { data } = await axiosInstance.get("/notifications/my");
+      
+      // TEMPORARY FIX: Additional client-side filtering as safety measure
+      const filteredData = data.filter(notification => {
+        // If notification has specific employee info, check if it's for current user
+        if (notification.employee && notification.employee.email && user?.email) {
+          return notification.employee.email.toLowerCase() === user.email.toLowerCase();
+        }
+        
+        // If no specific employee attached, assume it's for all employees
+        return notification.recipientRole === "Employee";
+      });
+      
       // Sort by date, newest first
-      const sorted = data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const sorted = filteredData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setNotifications(sorted);
+      
+      // Debug: Log what we received
+      console.log("📨 Employee Notifications Debug:");
+      console.log("Current User Email:", user?.email);
+      console.log("Total notifications from backend:", data.length);
+      console.log("Filtered notifications for employee:", filteredData.length);
+      data.forEach((notif, index) => {
+        console.log(`Notification ${index}:`, {
+          id: notif._id,
+          message: notif.message,
+          recipientRole: notif.recipientRole,
+          employeeEmail: notif.employee?.email,
+          isForCurrentUser: notif.employee?.email?.toLowerCase() === user?.email?.toLowerCase()
+        });
+      });
     } catch (error) {
       console.error("Error fetching notifications:", error);
       toast.error(
@@ -299,7 +328,7 @@ const EmployeeNotifications = () => {
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <EmployeeSidebar />
+      
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

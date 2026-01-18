@@ -13,7 +13,7 @@ import {
 } from "react-icons/fa";
 import axiosInstance from "../../utils/axiosInstance";
 import { toast } from "react-toastify";
-import EmployeeSidebar from "../../components/employee/EmployeeSidebar";
+
 import { useSettings } from "../../contexts/SettingsContext";
 
 const EmployeeLeave = () => {
@@ -61,7 +61,7 @@ const EmployeeLeave = () => {
   const fetchMyLeaves = async () => {
     try {
       setIsLoadingLeaves(true);
-      const res = await axiosInstance.get("/employee-leave/my-requests");
+      const res = await axiosInstance.get("/employee-leave/my");
       setMyLeaves(res.data);
       
       // Calculate stats
@@ -265,7 +265,7 @@ const EmployeeLeave = () => {
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
-      <EmployeeSidebar />
+     
 
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">

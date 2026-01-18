@@ -19,11 +19,13 @@ import {
   FaVenusMars,
   FaGraduationCap,
   FaHome,
-  FaHeart
+  FaHeart,
+  FaSave,
+  FaArrowLeft
 } from "react-icons/fa";
 import { MdWork, MdDateRange, MdPerson } from "react-icons/md";
 import axiosInstance from "../../utils/axiosInstance";
-import EmployeeSidebar from "../../components/employee/EmployeeSidebar";
+
 import { useSettings } from "../../contexts/SettingsContext";
 import { toast } from "react-toastify";
 
@@ -40,6 +42,8 @@ const EmployeeProfile = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedProfile, setEditedProfile] = useState(null);
 
   useEffect(() => {
     fetchProfile();
@@ -50,6 +54,7 @@ const EmployeeProfile = () => {
       setIsLoading(true);
       const res = await axiosInstance.get("/employees/dashboard");
       setProfile(res.data);
+      setEditedProfile(res.data);
     } catch (error) {
       console.error("Error fetching profile:", error);
       toast.error(
@@ -64,6 +69,45 @@ const EmployeeProfile = () => {
 
   const handlePasswordChange = (e) => {
     setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+  };
+
+  const handleProfileEdit = (e) => {
+    const { name, value } = e.target;
+    setEditedProfile({
+      ...editedProfile,
+      [name]: value
+    });
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      setIsLoading(true);
+      const res = await axiosInstance.put("/employees/update-profile", editedProfile);
+      
+      setProfile(res.data);
+      setEditedProfile(res.data);
+      setIsEditing(false);
+      
+      toast.success(
+        language === "am" 
+          ? "መገለጫ በተሳካ ሁኔታ ተዘመነ" 
+          : "Profile updated successfully"
+      );
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      toast.error(
+        language === "am" 
+          ? "መገለጫ ማዘመን አልተሳካም" 
+          : "Failed to update profile"
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditedProfile(profile);
+    setIsEditing(false);
   };
 
   const handlePasswordSubmit = async (e) => {
@@ -117,7 +161,6 @@ const EmployeeProfile = () => {
   if (isLoading) {
     return (
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-        <EmployeeSidebar />
         <main className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -138,24 +181,118 @@ const EmployeeProfile = () => {
   const cardBorder = darkMode ? "border-gray-700" : "border-gray-200";
   const inputBg = darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-50 text-gray-800";
   const inputBorder = darkMode ? "border-gray-600" : "border-gray-300";
+  const inputBorderFocus = darkMode ? "focus:border-blue-500" : "focus:border-blue-500";
+  const disabledInputBg = darkMode ? "bg-gray-900 text-gray-400" : "bg-gray-100 text-gray-500";
+
+  // Non-editable fields (display only)
+  const nonEditableFields = ['email', 'empId', 'department', 'typeOfPosition', 'salary', 'experience'];
+
+  // Check if field is non-editable
+  const isNonEditable = (fieldName) => nonEditableFields.includes(fieldName);
+
+  // Render field either as input or display div
+  const renderField = (fieldName, label, icon, value) => {
+    const IconComponent = icon;
+    
+    if (isEditing && !isNonEditable(fieldName)) {
+      return (
+        <div>
+          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
+            <IconComponent className="text-blue-600 dark:text-blue-400" />
+            {label}
+          </label>
+          <input
+            type="text"
+            name={fieldName}
+            value={editedProfile[fieldName] || ""}
+            onChange={handleProfileEdit}
+            className={`w-full px-4 py-2.5 border ${inputBorder} ${inputBorderFocus} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+          />
+        </div>
+      );
+    } else {
+      return (
+        <div>
+          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
+            <IconComponent className="text-blue-600 dark:text-blue-400" />
+            {label}
+            {isNonEditable(fieldName) && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                ({language === "am" ? "አይስራም" : "Read-only"})
+              </span>
+            )}
+          </label>
+          <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${isNonEditable(fieldName) ? disabledInputBg : inputBg}`}>
+            {value || "-"}
+          </div>
+        </div>
+      );
+    }
+  };
 
   return (
     <div className="flex min-h-screen">
-      <EmployeeSidebar />
-      
       <main className={`${mainBg} flex-1 p-6 overflow-auto transition-colors duration-300`}>
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {language === "am" ? "መገለጫ" : "Profile"}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              {language === "am" 
-                ? "የእርስዎን የሰራተኛ መረጃ ይመልከቱ እና ያስተካክሉ" 
-                : "View and manage your employee information"}
-            </p>
+          {/* Header with Edit Button */}
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+                {language === "am" ? "መገለጫ" : "Profile"}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400">
+                {language === "am" 
+                  ? "የእርስዎን የሰራተኛ መረጃ ይመልከቱ እና ያስተካክሉ" 
+                  : "View and manage your employee information"}
+              </p>
+            </div>
+            
+            {!isEditing ? (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+              >
+                <FaEdit />
+                {language === "am" ? "መገለጫ አስተካክል" : "Edit Profile"}
+              </button>
+            ) : (
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveProfile}
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <FaSave />
+                  {language === "am" ? "አስቀምጥ" : "Save Changes"}
+                </button>
+                <button
+                  onClick={handleCancelEdit}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <FaTimes />
+                  {language === "am" ? "ይቅር" : "Cancel"}
+                </button>
+              </div>
+            )}
           </div>
+
+          {isEditing && (
+            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <div className="flex items-center gap-3">
+                <FaEdit className="text-yellow-600 dark:text-yellow-400" />
+                <div>
+                  <p className="font-medium text-yellow-800 dark:text-yellow-300">
+                    {language === "am" ? "የማስተካከያ ሁኔታ" : "Edit Mode"}
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-400">
+                    {language === "am" 
+                      ? "የሚከተሉት መስኮች ብቻ ሊስተካከሉ ይችላሉ፡ ስም፣ የአባት ስም፣ ስልክ፣ የእድር ሰው፣ የእድር ሰው አድራሻ"
+                      : "Only these fields can be edited: First Name, Last Name, Phone, Contact Person, Contact Person Address"
+                    }
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left Column - Profile Card */}
@@ -178,20 +315,36 @@ const EmployeeProfile = () => {
                   </div>
                   
                   <div className="flex-1 text-center md:text-left">
-                    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                      {profile?.firstName} {profile?.lastName}
-                    </h2>
-                    <p className="text-blue-600 dark:text-blue-400 mt-1">{profile?.typeOfPosition || "Employee"}</p>
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
+                          {profile?.firstName} {profile?.lastName}
+                        </h2>
+                        <p className="text-blue-600 dark:text-blue-400 mt-1">
+                          {profile?.typeOfPosition || "Employee"}
+                        </p>
+                      </div>
+                      
+                      {isEditing && (
+                        <button
+                          onClick={() => {/* Add photo upload functionality */}}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm font-medium transition-colors flex items-center gap-2"
+                        >
+                          <FaEdit className="text-xs" />
+                          {language === "am" ? "ምስል ቀይር" : "Change Photo"}
+                        </button>
+                      )}
+                    </div>
                     
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-4 py-2">
+                      <div className={`${nonEditableFields.includes('empId') ? disabledInputBg : 'bg-blue-50 dark:bg-blue-900/30'} rounded-lg px-4 py-2`}>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ሰራተኛ መታወቂያ" : "Employee ID"}
                         </p>
                         <p className="font-semibold text-gray-900 dark:text-white">{profile?.empId || "-"}</p>
                       </div>
                       
-                      <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-4 py-2">
+                      <div className={`${nonEditableFields.includes('department') ? disabledInputBg : 'bg-blue-50 dark:bg-blue-900/30'} rounded-lg px-4 py-2`}>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ክፍል" : "Department"}
                         </p>
@@ -212,137 +365,114 @@ const EmployeeProfile = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Column 1 */}
                   <div className="space-y-5">
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaUser className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "ስም" : "First Name"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.firstName || "-"}
-                      </div>
-                    </div>
+                    {/* First Name - Editable */}
+                    {renderField(
+                      'firstName',
+                      language === "am" ? "ስም" : "First Name",
+                      FaUser,
+                      profile?.firstName
+                    )}
 
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaUser className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "የአባት ስም" : "Last Name"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.lastName || "-"}
-                      </div>
-                    </div>
+                    {/* Last Name - Editable */}
+                    {renderField(
+                      'lastName',
+                      language === "am" ? "የአባት ስም" : "Last Name",
+                      FaUser,
+                      profile?.lastName
+                    )}
 
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaEnvelope className="text-blue-600 dark:text-blue-400" />
-                        Email
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.email || "-"}
-                      </div>
-                    </div>
+                    {/* Email - Non-editable */}
+                    {renderField(
+                      'email',
+                      "Email",
+                      FaEnvelope,
+                      profile?.email
+                    )}
 
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaPhone className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "ስልክ" : "Phone"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.phoneNumber || "-"}
-                      </div>
-                    </div>
+                    {/* Phone - Editable */}
+                    {renderField(
+                      'phoneNumber',
+                      language === "am" ? "ስልክ" : "Phone",
+                      FaPhone,
+                      profile?.phoneNumber
+                    )}
 
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaBuilding className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "የክፍል ስም" : "Department"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.department || "-"}
-                      </div>
-                    </div>
+                    {/* Department - Non-editable */}
+                    {renderField(
+                      'department',
+                      language === "am" ? "የክፍል ስም" : "Department",
+                      FaBuilding,
+                      profile?.department
+                    )}
                   </div>
 
                   {/* Column 2 */}
                   <div className="space-y-5">
+                    {/* Position - Non-editable */}
+                    {renderField(
+                      'typeOfPosition',
+                      language === "am" ? "የስራ አይነት" : "Position",
+                      FaBriefcase,
+                      profile?.typeOfPosition
+                    )}
+
+                    {/* Employee ID - Non-editable */}
+                    {renderField(
+                      'empId',
+                      language === "am" ? "የሰራተኛ መታወቂያ" : "Employee ID",
+                      FaIdBadge,
+                      profile?.empId
+                    )}
+
+                    {/* Salary - Non-editable */}
+                    {renderField(
+                      'salary',
+                      "Salary",
+                      FaDollarSign,
+                      profile?.salary ? `$${profile.salary.toLocaleString()}` : "-"
+                    )}
+
+                    {/* Experience - Non-editable */}
+                    {renderField(
+                      'experience',
+                      language === "am" ? "ልምድ" : "Experience",
+                      FaFileAlt,
+                      profile?.experience
+                    )}
+
+                    {/* Contact Person - Editable */}
+                    {renderField(
+                      'contactPerson',
+                      language === "am" ? "የእድር ሰው ስም" : "Contact Person",
+                      FaUser,
+                      profile?.contactPerson
+                    )}
+                  </div>
+                </div>
+
+                {/* Additional Info - Editable */}
+                <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Contact Person Address - Editable */}
+                    {renderField(
+                      'contactPersonAddress',
+                      language === "am" ? "የእድር ሰው አድራሻ" : "Contact Address",
+                      FaAddressCard,
+                      profile?.contactPersonAddress
+                    )}
+
+                    {/* Status - Display only */}
                     <div>
                       <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
                         <FaBriefcase className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "የስራ አይነት" : "Position"}
+                        {language === "am" ? "ሁኔታ" : "Status"}
                       </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.typeOfPosition || "-"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaIdBadge className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "የሰራተኛ መታወቂያ" : "Employee ID"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.empId || "-"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaDollarSign className="text-blue-600 dark:text-blue-400" />
-                        Salary
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.salary ? `$${profile.salary.toLocaleString()}` : "-"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaFileAlt className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "ልምድ" : "Experience"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.experience || "-"}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaUser className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "የእድር ሰው ስም" : "Contact Person"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                        {profile?.contactPerson || "-"}
+                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${disabledInputBg}`}>
+                        {profile?.employeeStatus || "-"}
                       </div>
                     </div>
                   </div>
                 </div>
-
-                {/* Additional Info */}
-                {(profile?.contactPersonAddress || profile?.employeeStatus) && (
-                  <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                          <FaAddressCard className="text-blue-600 dark:text-blue-400" />
-                          {language === "am" ? "የእድር ሰው አድራሻ" : "Contact Address"}
-                        </label>
-                        <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                          {profile?.contactPersonAddress || "-"}
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                          <FaBriefcase className="text-blue-600 dark:text-blue-400" />
-                          {language === "am" ? "ሁኔታ" : "Status"}
-                        </label>
-                        <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${inputBg}`}>
-                          {profile?.employeeStatus || "-"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 

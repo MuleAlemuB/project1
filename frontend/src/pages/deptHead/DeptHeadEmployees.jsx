@@ -24,8 +24,10 @@ import {
   FaClock,
   FaFileContract,
   FaHome,
-  FaHeart,
   FaRing,
+  FaLock,
+  FaSave,
+  FaTimes,
 } from "react-icons/fa";
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
@@ -41,6 +43,7 @@ const translations = {
     deleteSuccess: "Employee deleted",
     deleteFailed: "Delete failed",
     updateFailed: "Update failed",
+    updateSuccess: "Employee updated successfully",
     view: "View",
     edit: "Edit",
     delete: "Delete",
@@ -57,7 +60,7 @@ const translations = {
     experience: "Experience",
     contactPerson: "Emergency Contact",
     contactPersonAddress: "Contact Person Address",
-    saveChanges: "Save",
+    saveChanges: "Save Changes",
     position: "Position",
     employeeStatus: "Employee Status",
     firstName: "First Name",
@@ -72,6 +75,11 @@ const translations = {
     employmentInfo: "Employment Information",
     contactInfo: "Contact Information",
     fullName: "Full Name",
+    readOnly: "Read Only (Admin Only)",
+    adminOnlyField: "This field can only be edited by Admin",
+    saving: "Saving...",
+    cancel: "Cancel",
+    updateRestricted: "You can only update employees in your department",
   },
   am: {
     employeesIn: "በዚህ ክፍል ያሉ ሰራተኞች",
@@ -82,6 +90,7 @@ const translations = {
     deleteSuccess: "ሰራተኛ ተሰርዟል",
     deleteFailed: "ማጥፋት አልተቻለም",
     updateFailed: "ማዘምን አልተቻለም",
+    updateSuccess: "ሰራተኛ በተሳካ ሁኔታ ተዘምኗል",
     view: "እይ",
     edit: "አርትዕ",
     delete: "አጥፋ",
@@ -98,7 +107,7 @@ const translations = {
     experience: "ልምድ",
     contactPerson: "የአደጋ አደጋ",
     contactPersonAddress: "የመገናኛ ሰው አድራሻ",
-    saveChanges: "አስቀምጥ",
+    saveChanges: "ለውጦችን አስቀምጥ",
     position: "ሥራ",
     employeeStatus: "የሰራተኛ ሁኔታ",
     firstName: "የመጀመሪያ ስም",
@@ -113,6 +122,11 @@ const translations = {
     employmentInfo: "የስራ መረጃ",
     contactInfo: "የመገናኛ መረጃ",
     fullName: "ሙሉ ስም",
+    readOnly: "ለማንበብ ብቻ (ለአስተዳዳሪ ብቻ)",
+    adminOnlyField: "ይህ መስክ በአስተዳዳሪ ብቻ ሊለወጥ ይችላል",
+    saving: "በማስቀመጥ ላይ...",
+    cancel: "አቋርጥ",
+    updateRestricted: "በክፍልዎ ውስጥ ያሉ ሰራተኞችን ብቻ ማዘምን ይችላሉ",
   },
 };
 
@@ -129,6 +143,7 @@ const DeptHeadEmployees = () => {
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({});
+  const [isSaving, setIsSaving] = useState(false);
 
   // Fetch department name
   useEffect(() => {
@@ -188,26 +203,140 @@ const DeptHeadEmployees = () => {
   };
 
   const handleSave = async () => {
+  if (!selectedEmployee) return;
+  
+  setIsSaving(true);
+  try {
+    // Debug: Log current user and selected employee info
+    console.log("Current user (dept head):", user);
+    console.log("Selected employee:", selectedEmployee);
+    console.log("Department head's department ID:", user.department);
+    console.log("Employee's department:", selectedEmployee.department);
+    
+    // Create data with only allowed fields for department head
+    const allowedFields = {
+      firstName: editData.firstName,
+      middleName: editData.middleName,
+      lastName: editData.lastName,
+      phoneNumber: editData.phoneNumber,
+      sex: editData.sex,
+      typeOfPosition: editData.typeOfPosition,
+      termOfEmployment: editData.termOfEmployment,
+      contactPerson: editData.contactPerson,
+      contactPersonAddress: editData.contactPersonAddress,
+      employeeStatus: editData.employeeStatus,
+      dateOfBirth: editData.dateOfBirth,
+      address: editData.address,
+      maritalStatus: editData.maritalStatus,
+    };
+    
+    console.log("Updating employee ID:", selectedEmployee._id);
+    console.log("Update data:", allowedFields);
+    
+    // OPTION 1: Try department-specific update endpoint
     try {
-      await axiosInstance.put(`/employees/${selectedEmployee._id}`, editData);
-      closeModal();
-      window.location.reload();
-    } catch (err) {
-      console.error(err);
-      alert(t.updateFailed);
+      const response = await axiosInstance.put(
+        `/depthead/employee/${selectedEmployee._id}`,
+        allowedFields
+      );
+      
+      if (response.data.success || response.data._id) {
+        // Update local state
+        setEmployees(prev => prev.map(emp => 
+          emp._id === selectedEmployee._id 
+            ? { ...emp, ...allowedFields } 
+            : emp
+        ));
+        
+        alert(t.updateSuccess);
+        closeModal();
+        return;
+      }
+    } catch (deptError) {
+      console.log("Department endpoint failed:", {
+        status: deptError.response?.status,
+        message: deptError.response?.data?.message,
+        data: deptError.response?.data
+      });
+      
+      // Check if it's a department mismatch error
+      if (deptError.response?.data?.message?.includes("department")) {
+        // Show specific department error
+        alert(`Error: ${deptError.response.data.message}\n\nYour department: ${user.department}\nEmployee's department: ${selectedEmployee.department}`);
+        setIsSaving(false);
+        return;
+      }
+      
+      // OPTION 2: Try standard employee update with limited fields
+      const limitedFields = {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        phoneNumber: editData.phoneNumber,
+        employeeStatus: editData.employeeStatus,
+        typeOfPosition: editData.typeOfPosition,
+      };
+      
+      const response = await axiosInstance.put(
+        `/employees/${selectedEmployee._id}`,
+        limitedFields
+      );
+      
+      if (response.data.success || response.data._id) {
+        // Update local state
+        setEmployees(prev => prev.map(emp => 
+          emp._id === selectedEmployee._id 
+            ? { ...emp, ...limitedFields } 
+            : emp
+        ));
+        
+        alert(t.updateSuccess);
+        closeModal();
+        return;
+      }
     }
-  };
-
+    
+    throw new Error(t.updateFailed);
+    
+  } catch (err) {
+    console.error("Update error details:", {
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      data: err.response?.data,
+      message: err.message
+    });
+    
+    // Show user-friendly error message
+    let errorMessage = t.updateFailed;
+    if (err.response?.status === 403) {
+      errorMessage = t.updateRestricted;
+    } else if (err.response?.data?.message) {
+      errorMessage = err.response.data.message;
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+    
+    alert(`${language === "en" ? "Error" : "ስህተት"}: ${errorMessage}`);
+  } finally {
+    setIsSaving(false);
+  }
+};
   const handleDelete = async (id) => {
     if (!window.confirm(t.deleteConfirm)) return;
 
     try {
-      await axiosInstance.delete(`/employees/${id}`);
+      // Try department head delete endpoint first
+      try {
+        await axiosInstance.delete(`/depthead/employee/${id}`);
+      } catch (deptError) {
+        // Fallback to standard endpoint
+        await axiosInstance.delete(`/employees/${id}`);
+      }
+      
       setEmployees(employees.filter((emp) => emp._id !== id));
       alert(t.deleteSuccess);
     } catch (err) {
-      console.error(err);
-      alert(t.deleteFailed);
+      console.error("Delete error:", err);
+      alert(err.response?.data?.message || t.deleteFailed);
     }
   };
 
@@ -241,6 +370,7 @@ const DeptHeadEmployees = () => {
     setSelectedEmployee(null);
     setIsEditing(false);
     setEditData({});
+    setIsSaving(false);
   };
 
   // Format date for display
@@ -253,6 +383,37 @@ const DeptHeadEmployees = () => {
       day: 'numeric'
     });
   };
+
+  // Test function to check available endpoints
+  const testEndpoints = async () => {
+    try {
+      console.log("Testing available endpoints...");
+      
+      // Check standard employee endpoint
+      try {
+        const testRes = await axiosInstance.get(`/employees`);
+        console.log("Employees endpoint exists, count:", testRes.data.length || testRes.data.count);
+      } catch (error) {
+        console.log("Employees endpoint error:", error.response?.status);
+      }
+      
+      // Check department head endpoints
+      try {
+        const testRes = await axiosInstance.get(`/depthead/profile`);
+        console.log("Depthead profile endpoint exists");
+      } catch (error) {
+        console.log("Depthead profile endpoint error:", error.response?.status);
+      }
+      
+    } catch (error) {
+      console.log("Test error:", error);
+    }
+  };
+
+  // Run test on component mount
+  useEffect(() => {
+    testEndpoints();
+  }, []);
 
   if (loading) {
     return (
@@ -293,7 +454,7 @@ const DeptHeadEmployees = () => {
           {t.employeesIn} <span className="text-blue-600 dark:text-blue-400">{deptName}</span>
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          {employees.length} employees in your department
+          {employees.length} {language === "en" ? "employees in your department" : "ሰራተኞች በክፍልዎ ውስጥ"}
         </p>
       </div>
 
@@ -441,7 +602,8 @@ const DeptHeadEmployees = () => {
                 </div>
                 <button
                   onClick={closeModal}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-2xl"
+                  disabled={isSaving}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-2xl disabled:opacity-50"
                 >
                   ✕
                 </button>
@@ -472,9 +634,9 @@ const DeptHeadEmployees = () => {
               </div>
 
               {isEditing ? (
-                // EDIT FORM - ALL FIELDS (except password)
+                // EDIT FORM - Department Head limited fields
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Column 1 */}
+                  {/* Column 1 - Editable fields */}
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
@@ -531,42 +693,6 @@ const DeptHeadEmployees = () => {
 
                     <div>
                       <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.email} *
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={editData.email || ""}
-                        onChange={handleChange}
-                        required
-                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? "bg-gray-700 border-gray-600 text-gray-100" 
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.empId} *
-                      </label>
-                      <input
-                        type="text"
-                        name="empId"
-                        value={editData.empId || ""}
-                        onChange={handleChange}
-                        required
-                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? "bg-gray-700 border-gray-600 text-gray-100" 
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
                         {t.phoneNumber}
                       </label>
                       <input
@@ -583,7 +709,7 @@ const DeptHeadEmployees = () => {
                     </div>
                   </div>
 
-                  {/* Column 2 */}
+                  {/* Column 2 - More editable fields */}
                   <div className="space-y-4">
                     <div>
                       <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
@@ -600,10 +726,10 @@ const DeptHeadEmployees = () => {
                             : "bg-white border-gray-300 text-gray-900"
                         }`}
                       >
-                        <option value="">Select Gender</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
+                        <option value="">{language === "en" ? "Select Gender" : "ፆታ ይምረጡ"}</option>
+                        <option value="Male">{language === "en" ? "Male" : "ወንድ"}</option>
+                        <option value="Female">{language === "en" ? "Female" : "ሴት"}</option>
+                        <option value="Other">{language === "en" ? "Other" : "ሌላ"}</option>
                       </select>
                     </div>
 
@@ -645,57 +771,28 @@ const DeptHeadEmployees = () => {
 
                     <div>
                       <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.salary}
+                        {t.employeeStatus}
                       </label>
-                      <input
-                        type="number"
-                        name="salary"
-                        value={editData.salary || ""}
+                      <select
+                        name="employeeStatus"
+                        value={editData.employeeStatus || ""}
                         onChange={handleChange}
                         className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                           darkMode 
                             ? "bg-gray-700 border-gray-600 text-gray-100" 
                             : "bg-white border-gray-300 text-gray-900"
                         }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.experience}
-                      </label>
-                      <input
-                        type="text"
-                        name="experience"
-                        value={editData.experience || ""}
-                        onChange={handleChange}
-                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? "bg-gray-700 border-gray-600 text-gray-100" 
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.qualification}
-                      </label>
-                      <input
-                        type="text"
-                        name="qualification"
-                        value={editData.qualification || ""}
-                        onChange={handleChange}
-                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? "bg-gray-700 border-gray-600 text-gray-100" 
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      />
+                      >
+                        <option value="">{language === "en" ? "Select Status" : "ሁኔታ ይምረጡ"}</option>
+                        <option value="Active">{language === "en" ? "Active" : "ንቁ"}</option>
+                        <option value="Inactive">{language === "en" ? "Inactive" : "ንቁ ያልሆነ"}</option>
+                        <option value="On Leave">{language === "en" ? "On Leave" : "በቀድሞ"}</option>
+                        <option value="Terminated">{language === "en" ? "Terminated" : "ተቋርጧል"}</option>
+                      </select>
                     </div>
                   </div>
 
-                  {/* Column 3 */}
+                  {/* Column 3 - Read-only fields and remaining editable fields */}
                   <div className="space-y-4 md:col-span-2">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
@@ -729,11 +826,11 @@ const DeptHeadEmployees = () => {
                               : "bg-white border-gray-300 text-gray-900"
                           }`}
                         >
-                          <option value="">Select Status</option>
-                          <option value="Single">Single</option>
-                          <option value="Married">Married</option>
-                          <option value="Divorced">Divorced</option>
-                          <option value="Widowed">Widowed</option>
+                          <option value="">{language === "en" ? "Select Status" : "ሁኔታ ይምረጡ"}</option>
+                          <option value="Single">{language === "en" ? "Single" : "ያላገባ"}</option>
+                          <option value="Married">{language === "en" ? "Married" : "ያገባ"}</option>
+                          <option value="Divorced">{language === "en" ? "Divorced" : "የፈታ"}</option>
+                          <option value="Widowed">{language === "en" ? "Widowed" : "የተቀበረ"}</option>
                         </select>
                       </div>
                     </div>
@@ -789,40 +886,147 @@ const DeptHeadEmployees = () => {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">
-                        {t.employeeStatus}
-                      </label>
-                      <select
-                        name="employeeStatus"
-                        value={editData.employeeStatus || ""}
-                        onChange={handleChange}
-                        className={`w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          darkMode 
-                            ? "bg-gray-700 border-gray-600 text-gray-100" 
-                            : "bg-white border-gray-300 text-gray-900"
-                        }`}
-                      >
-                        <option value="">Select Status</option>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                        <option value="On Leave">On Leave</option>
-                        <option value="Terminated">Terminated</option>
-                      </select>
+                    {/* Read-only fields (Admin only) */}
+                    <div className="space-y-4 p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
+                      <h3 className="font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                        <FaLock className="text-gray-500 dark:text-gray-400" />
+                        {t.readOnly}
+                      </h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-500 dark:text-gray-400">
+                            {t.email}
+                          </label>
+                          <input
+                            type="email"
+                            value={editData.email || ""}
+                            readOnly
+                            disabled
+                            className={`w-full px-3 py-2 rounded-lg border ${
+                              darkMode 
+                                ? "bg-gray-800 border-gray-700 text-gray-400" 
+                                : "bg-gray-100 border-gray-300 text-gray-500"
+                            }`}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t.adminOnlyField}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-500 dark:text-gray-400">
+                            {t.empId}
+                          </label>
+                          <input
+                            type="text"
+                            value={editData.empId || ""}
+                            readOnly
+                            disabled
+                            className={`w-full px-3 py-2 rounded-lg border ${
+                              darkMode 
+                                ? "bg-gray-800 border-gray-700 text-gray-400" 
+                                : "bg-gray-100 border-gray-300 text-gray-500"
+                            }`}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t.adminOnlyField}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-500 dark:text-gray-400">
+                            {t.salary}
+                          </label>
+                          <input
+                            type="number"
+                            value={editData.salary || ""}
+                            readOnly
+                            disabled
+                            className={`w-full px-3 py-2 rounded-lg border ${
+                              darkMode 
+                                ? "bg-gray-800 border-gray-700 text-gray-400" 
+                                : "bg-gray-100 border-gray-300 text-gray-500"
+                            }`}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t.adminOnlyField}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium mb-1 text-gray-500 dark:text-gray-400">
+                            {t.experience}
+                          </label>
+                          <input
+                            type="text"
+                            value={editData.experience || ""}
+                            readOnly
+                            disabled
+                            className={`w-full px-3 py-2 rounded-lg border ${
+                              darkMode 
+                                ? "bg-gray-800 border-gray-700 text-gray-400" 
+                                : "bg-gray-100 border-gray-300 text-gray-500"
+                            }`}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t.adminOnlyField}
+                          </p>
+                        </div>
+
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium mb-1 text-gray-500 dark:text-gray-400">
+                            {t.qualification}
+                          </label>
+                          <input
+                            type="text"
+                            value={editData.qualification || ""}
+                            readOnly
+                            disabled
+                            className={`w-full px-3 py-2 rounded-lg border ${
+                              darkMode 
+                                ? "bg-gray-800 border-gray-700 text-gray-400" 
+                                : "bg-gray-100 border-gray-300 text-gray-500"
+                            }`}
+                          />
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {t.adminOnlyField}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div className="md:col-span-2 flex gap-4">
                     <button
                       onClick={handleSave}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+                      disabled={isSaving}
+                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
                     >
-                      {t.saveChanges}
+                      {isSaving ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          {t.saving}
+                        </>
+                      ) : (
+                        <>
+                          <FaSave className="w-4 h-4" />
+                          {t.saveChanges}
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={closeModal}
+                      disabled={isSaving}
+                      className="px-6 py-3 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
+                      <FaTimes className="w-4 h-4" />
+                      {t.cancel}
                     </button>
                   </div>
                 </div>
               ) : (
-                // VIEW DETAILS - ALL FIELDS (except password)
+                // VIEW DETAILS - ALL FIELDS
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Personal Information */}
                   <div className={`p-4 rounded-lg ${

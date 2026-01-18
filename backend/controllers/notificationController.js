@@ -51,6 +51,8 @@ const getDepartmentName = async (departmentId) => {
 export const getMyNotifications = asyncHandler(async (req, res) => {
   const user = req.user;
   const role = user.role.toLowerCase();
+  const userId = user._id; // Get user ID
+  const userEmail = user.email?.toLowerCase(); // Get user email
 
   let notifications;
 
@@ -367,10 +369,24 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
     res.json(enhancedNotifications);
   } else if (role === "employee") {
+    // FIXED: Filter notifications specifically for this employee
     notifications = await Notification.find({
       $or: [
-        { "employee.email": user.email },
-        { recipientRole: "Employee" }
+        // Notifications with specific employee ID
+        { recipientId: userId },
+        // Notifications with employee object containing this employee's ID
+        { "employee._id": userId },
+        // Notifications with employee object containing this employee's email
+        { "employee.email": userEmail },
+        // General employee notifications (without specific recipient)
+        { 
+          recipientRole: "Employee",
+          $and: [
+            { recipientId: { $exists: false } },
+            { "employee._id": { $exists: false } },
+            { "employee.email": { $exists: false } }
+          ]
+        }
       ]
     })
       .sort({ createdAt: -1 })
@@ -388,16 +404,26 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                 .lean();
               
               if (leave) {
-                enhancedNotif.leaveRequestId = leave;
-                enhancedNotif.metadata = {
-                  employeeName: leave.requesterName,
-                  department: leave.department,
-                  startDate: leave.startDate,
-                  endDate: leave.endDate,
-                  reason: leave.reason,
-                  status: leave.status,
-                  leaveType: leave.leaveType
-                };
+                // Double-check if this leave belongs to the current employee
+                const isMyLeave = 
+                  (leave.requester && leave.requester.toString() === userId.toString()) ||
+                  (leave.requesterEmail && leave.requesterEmail.toLowerCase() === userEmail);
+                
+                if (isMyLeave) {
+                  enhancedNotif.leaveRequestId = leave;
+                  enhancedNotif.metadata = {
+                    employeeName: leave.requesterName,
+                    department: leave.department,
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    reason: leave.reason,
+                    status: leave.status,
+                    leaveType: leave.leaveType
+                  };
+                } else {
+                  // If not this employee's leave request, mark for removal
+                  return null;
+                }
               } else if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
@@ -422,7 +448,10 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
       })
     );
 
-    res.json(enhancedNotifications);
+    // Filter out null values (notifications that don't belong to this employee)
+    const filteredNotifications = enhancedNotifications.filter(notif => notif !== null);
+    
+    res.json(filteredNotifications);
   } else {
     res.status(403);
     throw new Error("User role not authorized");
@@ -433,6 +462,7 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 export const markAsSeen = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id; // Add user ID
 
   const notif = await Notification.findById(req.params.id);
   if (!notif) {
@@ -440,11 +470,28 @@ export const markAsSeen = asyncHandler(async (req, res) => {
     throw new Error("Notification not found");
   }
 
-  const isEmployee = role === "employee" && notif.employee?.email?.toLowerCase() === email;
-  const isDeptHead = role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead";
-  const isAdmin = role === "admin" && notif.recipientRole?.toLowerCase() === "admin";
+  // FIXED: Check authorization with user ID for employees
+  let isAuthorized = false;
+  
+  if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
+    isAuthorized = true;
+  } else if (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") {
+    isAuthorized = true;
+  } else if (role === "employee") {
+    // Check multiple conditions for employee authorization
+    if (notif.recipientRole?.toLowerCase() === "employee") {
+      if (
+        (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
+        (notif.employee?._id && notif.employee._id.toString() === userId.toString()) ||
+        (notif.employee?.email && notif.employee.email.toLowerCase() === email) ||
+        (!notif.recipientId && !notif.employee?._id && !notif.employee?.email)
+      ) {
+        isAuthorized = true;
+      }
+    }
+  }
 
-  if (!isEmployee && !isDeptHead && !isAdmin) {
+  if (!isAuthorized) {
     res.status(403);
     throw new Error("Not authorized to mark this notification as seen");
   }
@@ -458,6 +505,7 @@ export const markAsSeen = asyncHandler(async (req, res) => {
 export const markAllAsRead = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id; // Add user ID
 
   let query = {};
 
@@ -466,10 +514,21 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
   } else if (role === "departmenthead") {
     query = { recipientRole: "DepartmentHead", seen: false };
   } else if (role === "employee") {
+    // FIXED: More specific query for employees
     query = {
       $or: [
+        { recipientId: userId, seen: false },
+        { "employee._id": userId, seen: false },
         { "employee.email": email, seen: false },
-        { recipientRole: "Employee", seen: false }
+        { 
+          recipientRole: "Employee", 
+          seen: false,
+          $and: [
+            { recipientId: { $exists: false } },
+            { "employee._id": { $exists: false } },
+            { "employee.email": { $exists: false } }
+          ]
+        }
       ]
     };
   }
@@ -483,6 +542,7 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
 export const clearReadNotifications = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id; // Add user ID
 
   let query = { seen: true };
 
@@ -491,9 +551,19 @@ export const clearReadNotifications = asyncHandler(async (req, res) => {
   } else if (role === "departmenthead") {
     query.recipientRole = "DepartmentHead";
   } else if (role === "employee") {
+    // FIXED: More specific query for employees
     query.$or = [
+      { recipientId: userId },
+      { "employee._id": userId },
       { "employee.email": email },
-      { recipientRole: "Employee" }
+      { 
+        recipientRole: "Employee",
+        $and: [
+          { recipientId: { $exists: false } },
+          { "employee._id": { $exists: false } },
+          { "employee.email": { $exists: false } }
+        ]
+      }
     ];
   }
 
@@ -506,7 +576,7 @@ export const clearReadNotifications = asyncHandler(async (req, res) => {
 export const deleteNotification = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
-  const userId = req.user._id.toString();
+  const userId = req.user._id;
 
   const notif = await Notification.findById(req.params.id);
   if (!notif) {
@@ -521,8 +591,14 @@ export const deleteNotification = asyncHandler(async (req, res) => {
   } else if (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") {
     canDelete = true;
   } else if (role === "employee") {
+    // FIXED: More specific checks for employee
     if (notif.recipientRole?.toLowerCase() === "employee") {
-      if (!notif.employee || Object.keys(notif.employee).length === 0 || notif.employee.email?.toLowerCase() === email) {
+      if (
+        (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
+        (notif.employee?._id && notif.employee._id.toString() === userId.toString()) ||
+        (notif.employee?.email && notif.employee.email.toLowerCase() === email) ||
+        (!notif.recipientId && !notif.employee?._id && !notif.employee?.email)
+      ) {
         canDelete = true;
       }
     }
@@ -666,6 +742,7 @@ export const updateApplicationStatus = asyncHandler(async (req, res) => {
 export const getNotificationDetails = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id;
   
   const notification = await Notification.findById(req.params.id).lean();
   
@@ -674,14 +751,25 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
     throw new Error("Notification not found");
   }
 
-  // Check authorization
-  const isAuthorized = 
-    (role === "admin" && notification.recipientRole?.toLowerCase() === "admin") ||
-    (role === "departmenthead" && notification.recipientRole?.toLowerCase() === "departmenthead") ||
-    (role === "employee" && (
-      notification.recipientRole?.toLowerCase() === "employee" ||
-      notification.employee?.email?.toLowerCase() === email
-    ));
+  // FIXED: Check authorization with user ID for employees
+  let isAuthorized = false;
+  
+  if (role === "admin" && notification.recipientRole?.toLowerCase() === "admin") {
+    isAuthorized = true;
+  } else if (role === "departmenthead" && notification.recipientRole?.toLowerCase() === "departmenthead") {
+    isAuthorized = true;
+  } else if (role === "employee") {
+    if (notification.recipientRole?.toLowerCase() === "employee") {
+      if (
+        (notification.recipientId && notification.recipientId.toString() === userId.toString()) ||
+        (notification.employee?._id && notification.employee._id.toString() === userId.toString()) ||
+        (notification.employee?.email && notification.employee.email.toLowerCase() === email) ||
+        (!notification.recipientId && !notification.employee?._id && !notification.employee?.email)
+      ) {
+        isAuthorized = true;
+      }
+    }
+  }
 
   if (!isAuthorized) {
     res.status(403);
@@ -749,6 +837,7 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
 export const getNotificationStats = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
+  const userId = req.user._id;
 
   let matchStage = {};
 
@@ -757,10 +846,20 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
   } else if (role === "departmenthead") {
     matchStage = { recipientRole: "DepartmentHead" };
   } else if (role === "employee") {
+    // FIXED: More specific match for employees
     matchStage = {
       $or: [
+        { recipientId: userId },
+        { "employee._id": userId },
         { "employee.email": email },
-        { recipientRole: "Employee" }
+        { 
+          recipientRole: "Employee",
+          $and: [
+            { recipientId: { $exists: false } },
+            { "employee._id": { $exists: false } },
+            { "employee.email": { $exists: false } }
+          ]
+        }
       ]
     };
   }

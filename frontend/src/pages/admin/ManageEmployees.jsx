@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axiosInstance from "../../utils/axiosInstance";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSettings } from "../../contexts/SettingsContext";
+import { useSettings } from "../../contexts/SettingsContext"; // Updated to use SettingsContext
 import { useAuth } from "../../contexts/AuthContext";
 import {
   FaUserPlus, FaSearch, FaEdit, FaTrash, FaEye, FaIdCard,
@@ -9,17 +9,15 @@ import {
   FaRing, FaBriefcase, FaCalendarAlt, FaGraduationCap,
   FaDollarSign, FaMapMarkerAlt, FaShieldAlt, FaSync,
   FaTimes, FaCheck, FaUserTie, FaLock, FaUserCircle,
-  FaLanguage, FaCopy, FaExclamationTriangle
+  FaCopy, FaExclamationTriangle
 } from "react-icons/fa";
 import { IoMdPerson, IoIosBusiness } from "react-icons/io";
 import { MdWork, MdEmail, MdPhone, MdLocationOn } from "react-icons/md";
 
 const ManageEmployee = () => {
-  const { darkMode, setDarkMode } = useSettings();
+  // Use SettingsContext for theme and language
+  const { darkMode, language } = useSettings();
   const { user, token } = useAuth();
-
-  // Language state
-  const [language, setLanguage] = useState("en");
 
   // Amharic translations
   const translations = {
@@ -317,7 +315,7 @@ const ManageEmployee = () => {
     }
   };
 
-  const t = translations[language];
+  const t = translations[language] || translations.en;
 
   const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -419,26 +417,25 @@ const ManageEmployee = () => {
   };
 
   // Generate unique Employee ID
-  // Generate unique Employee ID
-const generateUniqueEmpId = () => {
-  let empId;
-  let attempts = 0;
-  const maxAttempts = 50;
-  
-  do {
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    empId = `DTU${randomNum}`; // <-- CHANGED FROM "EMP" TO "DTU"
-    attempts++;
+  const generateUniqueEmpId = () => {
+    let empId;
+    let attempts = 0;
+    const maxAttempts = 50;
     
-    if (attempts >= maxAttempts) {
-      const timestamp = Date.now().toString().slice(-4);
-      empId = `DTU${timestamp}`; // <-- CHANGED FROM "EMP" TO "DTU"
-    }
-  } while (usedEmpIds.has(empId) && attempts < maxAttempts * 2);
-  
-  setUsedEmpIds(prev => new Set([...prev, empId]));
-  return empId;
-};
+    do {
+      const randomNum = Math.floor(1000 + Math.random() * 9000);
+      empId = `DTU${randomNum}`;
+      attempts++;
+      
+      if (attempts >= maxAttempts) {
+        const timestamp = Date.now().toString().slice(-4);
+        empId = `DTU${timestamp}`;
+      }
+    } while (usedEmpIds.has(empId) && attempts < maxAttempts * 2);
+    
+    setUsedEmpIds(prev => new Set([...prev, empId]));
+    return empId;
+  };
 
   // Copy to clipboard
   const copyToClipboard = (text, field) => {
@@ -447,14 +444,6 @@ const generateUniqueEmpId = () => {
       setTimeout(() => setCopiedField(null), 2000);
     });
   };
-
-  // persist dark mode
-  useEffect(() => {
-    const storedMode = localStorage.getItem("darkMode");
-    if (storedMode !== null) setDarkMode(storedMode === "true");
-  }, [setDarkMode]);
-
-  useEffect(() => localStorage.setItem("darkMode", darkMode), [darkMode]);
 
   // fetch departments
   const fetchDepartments = async () => {
@@ -894,11 +883,6 @@ const generateUniqueEmpId = () => {
     }
   };
 
-  // Toggle language
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === "en" ? "am" : "en");
-  };
-
   return (
     <div className={`${darkMode ? "bg-gray-900 text-white" : "bg-gray-50"} min-h-screen p-4 md:p-6`}>
       {/* Success Message Toast */}
@@ -925,24 +909,7 @@ const generateUniqueEmpId = () => {
       <div className="mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <div className="flex items-center space-x-3 mb-2">
-              <h1 className="text-3xl font-bold text-gray-800 dark:text-white">{t.pageTitle}</h1>
-              {/* Language Toggle Button */}
-              <button
-                onClick={toggleLanguage}
-                className={`px-3 py-1 rounded-lg flex items-center space-x-2 ${
-                  darkMode 
-                    ? "bg-gray-700 hover:bg-gray-600" 
-                    : "bg-gray-200 hover:bg-gray-300"
-                } transition`}
-                title={t.language}
-              >
-                <FaLanguage className={language === "am" ? "text-blue-500" : "text-gray-500"} />
-                <span className="text-sm font-medium">
-                  {language === "en" ? t.amharic : t.english}
-                </span>
-              </button>
-            </div>
+            <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">{t.pageTitle}</h1>
             <p className="text-gray-600 dark:text-gray-400">
               {t.pageDescription}
             </p>
@@ -1950,7 +1917,7 @@ const generateUniqueEmpId = () => {
         </div>
       </div>
 
-      {/* View Modal - This remains the same as before */}
+      {/* View Modal */}
       <AnimatePresence>
         {viewEmployee && (
           <motion.div

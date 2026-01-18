@@ -71,7 +71,7 @@ const ProfilePage = () => {
       removePhoto: "Remove Photo",
       passwordUpdated: "Password updated successfully",
       profileUpdated: "Profile updated successfully",
-      passwordRequirements: "Password must be at least 6 characters with uppercase, lowercase, number, and special character",
+      passwordRequirements: "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
       passwordsNotMatch: "New password and confirmation do not match",
       currentPasswordWrong: "Current password is incorrect",
       loading: "Loading profile...",
@@ -194,6 +194,22 @@ const ProfilePage = () => {
     localStorage.setItem("profileData", JSON.stringify(updatedProfile));
   };
 
+  // Handle department selection
+  const handleDepartmentChange = (e) => {
+    const departmentId = e.target.value;
+    const selectedDept = departments.find(dept => dept._id === departmentId);
+    
+    if (selectedDept) {
+      const updatedProfile = { 
+        ...profile, 
+        department: departmentId,
+        departmentName: selectedDept.name 
+      };
+      setProfile(updatedProfile);
+      localStorage.setItem("profileData", JSON.stringify(updatedProfile));
+    }
+  };
+
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
     setPasswords({ ...passwords, [name]: value });
@@ -251,29 +267,81 @@ const ProfilePage = () => {
     setErrors(prev => ({ ...prev, photo: undefined }));
   };
 
+  // Validate form
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // Required fields validation
+    if (!profile.firstName?.trim()) newErrors.firstName = t.validation.required;
+    if (!profile.lastName?.trim()) newErrors.lastName = t.validation.required;
+    if (!profile.email?.trim()) newErrors.email = t.validation.required;
+    
+    // Email format validation
+    if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+      newErrors.email = t.validation.email;
+    }
+    
+    // Phone validation (optional)
+    if (profile.phoneNumber && !/^[\d\s\-\+\(\)]{10,}$/.test(profile.phoneNumber)) {
+      newErrors.phoneNumber = t.validation.phone;
+    }
+    
+    return newErrors;
+  };
+
   // Save profile
   const handleSave = async () => {
+    // Validate form
+    const formErrors = validateForm();
+    if (Object.keys(formErrors).length > 0) {
+      setErrors(formErrors);
+      return;
+    }
+    
     setProfileLoading(true);
     setErrors({});
     
     try {
-      // Prepare data for update
-      const updateData = { ...profile };
-      delete updateData.photo; // Don't send photo URL in JSON
+      // Prepare data for update - include department as ID
+      const updateData = { 
+        firstName: profile.firstName,
+        middleName: profile.middleName,
+        lastName: profile.lastName,
+        email: profile.email,
+        phoneNumber: profile.phoneNumber,
+        role: profile.role,
+        department: profile.department, // This should be department ID
+        typeOfPosition: profile.typeOfPosition,
+        empId: profile.empId,
+        termOfEmployment: profile.termOfEmployment,
+        contactPerson: profile.contactPerson,
+        contactPersonAddress: profile.contactPersonAddress,
+        employeeStatus: profile.employeeStatus,
+        salary: profile.salary,
+        experience: profile.experience // This will be read-only, but we still send it
+      };
       
       // Update profile data
-      await axios.put("/admin/me", updateData);
+      const response = await axios.put("/admin/me", updateData);
+      
+      // Update local state with response data
+      const updatedProfile = response.data;
+      setProfile(updatedProfile);
+      localStorage.setItem("profileData", JSON.stringify(updatedProfile));
 
       // Upload photo if changed
       if (photoFile) {
         const formData = new FormData();
         formData.append("photo", photoFile);
         
-        await axios.put("/admin/me/photo", formData, {
+        const photoResponse = await axios.put("/admin/me/photo", formData, {
           headers: { 
             "Content-Type": "multipart/form-data",
           },
         });
+        
+        // Update photo in state
+        setProfile(prev => ({ ...prev, photo: photoResponse.data.photo }));
       }
 
       setSuccessMessage(t.profileUpdated);
@@ -283,7 +351,7 @@ const ProfilePage = () => {
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(""), 3000);
     } catch (err) {
-      console.error("Failed to update profile:", err);
+      console.error("Failed to update profile:", err.response?.data || err);
       setErrors({ 
         save: err.response?.data?.message || t.updateError 
       });
@@ -294,50 +362,143 @@ const ProfilePage = () => {
 
   // Change password
   const handleChangePassword = async () => {
-    setPasswordLoading(true);
-    setErrors({});
+  setPasswordLoading(true);
+  setErrors({});
 
-    // Validate passwords
-    if (passwords.new !== passwords.confirm) {
-      setErrors({ confirm: t.passwordsNotMatch });
-      setPasswordLoading(false);
-      return;
-    }
+  console.log("🔐 Frontend - Password change attempt:", passwords);
 
-    if (!validatePassword(passwords.new)) {
-      setErrors({ new: t.passwordRequirements });
-      setPasswordLoading(false);
-      return;
-    }
+  // Validate passwords
+  if (!passwords.current?.trim()) {
+    setErrors({ current: t.currentPassword + " is required" });
+    setPasswordLoading(false);
+    return;
+  }
 
-    try {
-      await axios.put("/admin/change-password", passwords);
-      
+  if (!passwords.new?.trim()) {
+    setErrors({ new: t.newPassword + " is required" });
+    setPasswordLoading(false);
+    return;
+  }
+
+  if (!passwords.confirm?.trim()) {
+    setErrors({ confirm: "Password confirmation is required" });
+    setPasswordLoading(false);
+    return;
+  }
+
+  // Trim all passwords
+  const trimmedCurrent = passwords.current.trim();
+  const trimmedNew = passwords.new.trim();
+  const trimmedConfirm = passwords.confirm.trim();
+
+  console.log("🔐 Frontend - Trimmed passwords:", {
+    current: trimmedCurrent,
+    new: trimmedNew,
+    confirm: trimmedConfirm,
+    match: trimmedNew === trimmedConfirm
+  });
+
+  if (trimmedNew !== trimmedConfirm) {
+    setErrors({ 
+      confirm: t.passwordsNotMatch,
+      details: `New: "${trimmedNew.substring(0, 10)}...", Confirm: "${trimmedConfirm.substring(0, 10)}..."`
+    });
+    setPasswordLoading(false);
+    return;
+  }
+
+  if (!validatePassword(trimmedNew)) {
+    setErrors({ new: t.passwordRequirements });
+    setPasswordLoading(false);
+    return;
+  }
+
+  try {
+    // Send data with consistent field names
+    // Try this format first - it matches what your backend expects
+    const payload = {
+      currentPassword: trimmedCurrent,
+      newPassword: trimmedNew,
+      confirm: trimmedConfirm
+    };
+
+    console.log("📤 Frontend - Sending payload:", payload);
+    console.log("🌐 Frontend - API endpoint:", "/admin/change-password");
+
+    const response = await axios.put("/admin/change-password", payload, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    console.log("📥 Frontend - Response received:", response.data);
+    
+    if (response.data.success) {
       setSuccessMessage(t.passwordUpdated);
       setPasswords({ current: "", new: "", confirm: "" });
       setShowPasswords({ current: false, new: false, confirm: false });
       
       // Clear success message after 3 seconds
       setTimeout(() => setSuccessMessage(""), 3000);
-    } catch (err) {
-      console.error("Failed to change password:", err);
-      const errorMsg = err.response?.data?.message;
-      
-      if (errorMsg?.includes('current') || errorMsg?.includes('Current')) {
-        setErrors({ current: t.currentPasswordWrong });
-      } else {
-        setErrors({ password: errorMsg || t.updateError });
-      }
-    } finally {
-      setPasswordLoading(false);
+    } else {
+      setErrors({ password: response.data.message || t.updateError });
     }
-  };
+  } catch (err) {
+    console.error("❌ Frontend - Password change error:", {
+      status: err.response?.status,
+      data: err.response?.data,
+      message: err.message
+    });
+    
+    const errorMsg = err.response?.data?.message || err.message;
+    const errorDetails = err.response?.data?.details;
+    
+    console.log("📋 Frontend - Error details:", errorDetails);
+    
+    if (errorMsg?.includes('do not match')) {
+      setErrors({ 
+        confirm: t.passwordsNotMatch,
+        details: errorDetails ? JSON.stringify(errorDetails) : undefined
+      });
+    } else if (errorMsg?.includes('Current password') || errorMsg?.includes('incorrect')) {
+      setErrors({ 
+        current: language === 'am' 
+          ? 'አሁን ያለው የይለፍ ቃል ትክክል አይደለም' 
+          : 'Current password is incorrect' 
+      });
+    } else if (errorMsg?.includes('required')) {
+      const field = errorMsg.includes('Current') ? 'current' : 
+                   errorMsg.includes('New') ? 'new' : 'confirm';
+      setErrors({ 
+        [field]: language === 'am' 
+          ? 'ይህ መስክ ያስፈልጋል' 
+          : 'This field is required' 
+      });
+    } else {
+      setErrors({ password: errorMsg || t.updateError });
+    }
+  } finally {
+    setPasswordLoading(false);
+  }
+};
 
-  // Department name
-  const departmentName =
-    profile?.department && typeof profile.department === "string"
-      ? departments.find((d) => d._id === profile.department)?.name || "-"
-      : profile?.department?.name || "-";
+  // Get department name for display
+  const getDepartmentName = () => {
+    if (!profile?.department) return "-";
+    
+    // If department is an object (populated)
+    if (typeof profile.department === 'object' && profile.department !== null) {
+      return profile.department.name || "-";
+    }
+    
+    // If department is an ID string
+    if (typeof profile.department === 'string') {
+      const dept = departments.find(d => d._id === profile.department);
+      return dept?.name || "-";
+    }
+    
+    return "-";
+  };
 
   // Toggle password visibility
   const togglePasswordVisibility = (field) => {
@@ -389,7 +550,7 @@ const ProfilePage = () => {
               {t.myProfile}
             </h1>
             <p className={`${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-              {profile.empId} • {profile.role} • {departmentName}
+              {profile.empId} • {profile.role} • {getDepartmentName()}
             </p>
           </div>
           
@@ -584,26 +745,55 @@ const ProfilePage = () => {
               
               <div className="p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Department Field */}
+                  <div className="space-y-2">
+                    <label className={`text-sm font-medium flex items-center gap-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                      <FaBuilding /> {t.department}
+                    </label>
+                    {editMode ? (
+                      <select
+                        name="department"
+                        value={profile.department || ""}
+                        onChange={handleDepartmentChange}
+                        className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
+                          darkMode 
+                            ? "bg-gray-700 border-gray-600 text-white" 
+                            : "bg-gray-50 border border-gray-200 text-gray-900"
+                        }`}
+                      >
+                        <option value="">Select Department</option>
+                        {departments.map((dept) => (
+                          <option key={dept._id} value={dept._id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className={`p-3 rounded-lg ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-800"}`}>
+                        {getDepartmentName()}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Other Editable Fields */}
                   {[
-                    { field: "department", icon: <FaBuilding />, value: departmentName },
-                    { field: "typeOfPosition", icon: <FaBriefcase /> },
-                    { field: "empId", icon: <FaHashtag /> },
-                    { field: "termOfEmployment", icon: <FaCalendarAlt /> },
-                    { field: "contactPerson", icon: <FaUserTie /> },
-                    { field: "contactPersonAddress", icon: <FaMapMarkerAlt /> },
-                    { field: "employeeStatus", icon: <FaUserTie /> },
-                    { field: "salary", icon: <FaDollarSign /> },
-                    { field: "experience", icon: <FaBriefcase /> },
-                  ].map(({ field, icon, value }) => (
+                    { field: "typeOfPosition", icon: <FaBriefcase />, label: t.position },
+                    { field: "empId", icon: <FaHashtag />, label: t.empId },
+                    { field: "termOfEmployment", icon: <FaCalendarAlt />, label: t.termOfEmployment },
+                    { field: "contactPerson", icon: <FaUserTie />, label: t.contactPerson },
+                    { field: "contactPersonAddress", icon: <FaMapMarkerAlt />, label: t.contactPersonAddress },
+                    { field: "employeeStatus", icon: <FaUserTie />, label: t.employeeStatus },
+                    { field: "salary", icon: <FaDollarSign />, label: t.salary },
+                  ].map(({ field, icon, label }) => (
                     <div key={field} className="space-y-2">
                       <label className={`text-sm font-medium flex items-center gap-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                        {icon} {t[field]}
+                        {icon} {label}
                       </label>
                       {editMode ? (
                         <input
                           type="text"
                           name={field}
-                          value={field === "department" ? departmentName : (profile[field] || "")}
+                          value={profile[field] || ""}
                           onChange={handleChange}
                           className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
                             darkMode 
@@ -613,11 +803,26 @@ const ProfilePage = () => {
                         />
                       ) : (
                         <p className={`p-3 rounded-lg ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-800"}`}>
-                          {value || profile[field] || "-"}
+                          {profile[field] || "-"}
                         </p>
                       )}
                     </div>
                   ))}
+
+                  {/* Experience Field - READ ONLY */}
+                  <div className="space-y-2">
+                    <label className={`text-sm font-medium flex items-center gap-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+                      <FaBriefcase /> {t.experience}
+                    </label>
+                    <p className={`p-3 rounded-lg ${darkMode ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-800"} ${editMode ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                      {profile.experience || "-"}
+                    </p>
+                    {editMode && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {language === 'am' ? 'ልምድ ብቻ ሊታይ የሚችል መስክ ነው። ለማስተካከል አስተዳዳሪዎን ያነጋግሩ።' : 'Experience is a read-only field. Please contact your administrator to update.'}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
