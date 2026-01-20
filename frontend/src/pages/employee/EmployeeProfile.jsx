@@ -1,5 +1,5 @@
 // src/pages/employee/EmployeeProfile.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   FaEnvelope,
   FaBuilding,
@@ -21,11 +21,15 @@ import {
   FaHome,
   FaHeart,
   FaSave,
-  FaArrowLeft
+  FaArrowLeft,
+  FaCamera,
+  FaUpload,
+  FaEye,
+  FaEyeSlash,
+  FaSpinner
 } from "react-icons/fa";
 import { MdWork, MdDateRange, MdPerson } from "react-icons/md";
 import axiosInstance from "../../utils/axiosInstance";
-
 import { useSettings } from "../../contexts/SettingsContext";
 import { toast } from "react-toastify";
 
@@ -44,6 +48,21 @@ const EmployeeProfile = () => {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const fileInputRef = useRef(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Password validation states
+  const [passwordErrors, setPasswordErrors] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false
+  });
 
   useEffect(() => {
     fetchProfile();
@@ -53,8 +72,12 @@ const EmployeeProfile = () => {
     try {
       setIsLoading(true);
       const res = await axiosInstance.get("/employees/dashboard");
-      setProfile(res.data);
-      setEditedProfile(res.data);
+      
+      // Process the profile data to ensure we have proper experience calculation
+      const profileData = processProfileData(res.data);
+      
+      setProfile(profileData);
+      setEditedProfile(profileData);
     } catch (error) {
       console.error("Error fetching profile:", error);
       toast.error(
@@ -67,25 +90,73 @@ const EmployeeProfile = () => {
     }
   };
 
-  const handlePasswordChange = (e) => {
-    setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
+  // Process profile data to calculate experience if not provided
+  const processProfileData = (data) => {
+    if (!data) return null;
+    
+    const processed = { ...data };
+    
+    // If experience is not provided in API response, calculate it
+    if (!processed.experience && processed.startDate) {
+      processed.experience = calculateExperienceFromStartDate(processed.startDate);
+    }
+    
+    return processed;
   };
 
-  const handleProfileEdit = (e) => {
+  // Fix: Use useCallback for password change to prevent re-renders
+  const handlePasswordChange = useCallback((e) => {
     const { name, value } = e.target;
-    setEditedProfile({
-      ...editedProfile,
-      [name]: value
-    });
+    setPasswordData(prev => ({ ...prev, [name]: value }));
+    
+    // Validate password if it's the newPassword field
+    if (name === "newPassword") {
+      validatePassword(value);
+    }
+  }, []);
+
+  const validatePassword = (password) => {
+    const errors = {
+      length: password.length >= 6,
+      uppercase: /[A-Z]/.test(password),
+      lowercase: /[a-z]/.test(password),
+      number: /\d/.test(password),
+      special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+    };
+    setPasswordErrors(errors);
+    return Object.values(errors).every(Boolean);
   };
 
+  // Fix: Use useCallback for profile edit
+  const handleProfileEdit = useCallback((e) => {
+    const { name, value } = e.target;
+    setEditedProfile(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  }, []);
+
+  // Fix: Handle save profile properly
   const handleSaveProfile = async () => {
     try {
-      setIsLoading(true);
-      const res = await axiosInstance.put("/employees/update-profile", editedProfile);
+      setSavingProfile(true);
       
-      setProfile(res.data);
-      setEditedProfile(res.data);
+      // Create an object with only editable fields
+      const updateData = {
+        firstName: editedProfile?.firstName || "",
+        lastName: editedProfile?.lastName || "",
+        phoneNumber: editedProfile?.phoneNumber || "",
+        contactPerson: editedProfile?.contactPerson || "",
+        contactPersonAddress: editedProfile?.contactPersonAddress || ""
+      };
+      
+      const res = await axiosInstance.put("/employees/update-profile", updateData);
+      
+      // Process the updated profile data
+      const updatedProfile = processProfileData(res.data);
+      
+      setProfile(updatedProfile);
+      setEditedProfile(updatedProfile);
       setIsEditing(false);
       
       toast.success(
@@ -94,14 +165,16 @@ const EmployeeProfile = () => {
           : "Profile updated successfully"
       );
     } catch (error) {
-      console.error("Error updating profile:", error);
+      console.error("Error updating profile:", error.response?.data || error);
+      const errorMessage = error.response?.data?.message || error.message;
       toast.error(
-        language === "am" 
+        errorMessage || 
+        (language === "am" 
           ? "መገለጫ ማዘመን አልተሳካም" 
-          : "Failed to update profile"
+          : "Failed to update profile")
       );
     } finally {
-      setIsLoading(false);
+      setSavingProfile(false);
     }
   };
 
@@ -110,9 +183,261 @@ const EmployeeProfile = () => {
     setIsEditing(false);
   };
 
+  const handlePhotoUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!validTypes.includes(file.type)) {
+      toast.error(
+        language === "am" 
+          ? "እባክዎን ትክክለኛ የምስል ፋይል (JPEG, PNG, GIF) ይምረጡ" 
+          : "Please select a valid image file (JPEG, PNG, GIF)"
+      );
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(
+        language === "am" 
+          ? "የምስል ፋይል መጠን ከ5MB መብለጥ የለበትም" 
+          : "Image file size must not exceed 5MB"
+      );
+      return;
+    }
+
+    try {
+      setIsUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const response = await axiosInstance.post('/employees/upload-photo', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      // Process the updated profile data
+      const updatedProfile = processProfileData(response.data);
+      
+      setProfile(updatedProfile);
+      setEditedProfile(updatedProfile);
+
+      toast.success(
+        language === "am" 
+          ? "የመገለጫ ምስል በተሳካ ሁኔታ ተስተካክሏል" 
+          : "Profile photo updated successfully"
+      );
+    } catch (error) {
+      console.error("Error uploading photo:", error.response?.data || error);
+      const errorMessage = error.response?.data?.message || error.message;
+      toast.error(
+        errorMessage || 
+        (language === "am" 
+          ? "ምስል መስቀል አልተሳካም" 
+          : "Failed to upload photo")
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Fix: Calculate experience from startDate
+  const calculateExperienceFromStartDate = (startDate) => {
+    if (!startDate) return "N/A";
+    
+    try {
+      const start = new Date(startDate);
+      const today = new Date();
+      
+      // Handle invalid dates
+      if (isNaN(start.getTime())) return "N/A";
+      
+      let years = today.getFullYear() - start.getFullYear();
+      let months = today.getMonth() - start.getMonth();
+      let days = today.getDate() - start.getDate();
+      
+      // Adjust for negative months
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+      
+      // Adjust for negative days
+      if (days < 0) {
+        months--;
+        // Get days in previous month
+        const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        days += prevMonth.getDate();
+        
+        // If months went negative after day adjustment
+        if (months < 0) {
+          years--;
+          months += 12;
+        }
+      }
+      
+      // Format the experience
+      if (years === 0 && months === 0) {
+        return days <= 0 ? "Less than 1 month" : `${days} day${days > 1 ? 's' : ''}`;
+      } else if (years === 0) {
+        return months === 1 ? "1 month" : `${months} months`;
+      } else if (months === 0) {
+        return years === 1 ? "1 year" : `${years} years`;
+      } else {
+        return `${years} year${years > 1 ? 's' : ''} ${months} month${months > 1 ? 's' : ''}`;
+      }
+    } catch (error) {
+      console.error("Error calculating experience:", error);
+      return "N/A";
+    }
+  };
+
+  // Get experience value
+  const getExperienceValue = () => {
+    if (profile?.experience) {
+      return profile.experience;
+    }
+    
+    // Calculate from startDate if available
+    if (profile?.startDate) {
+      return calculateExperienceFromStartDate(profile.startDate);
+    }
+    
+    return "N/A";
+  };
+
+  // Theme-based colors
+  const mainBg = darkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100";
+  const cardBg = darkMode ? "bg-gray-800 text-gray-100" : "bg-white text-gray-800";
+  const cardBorder = darkMode ? "border-gray-700" : "border-gray-200";
+  const inputBg = darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-50 text-gray-800";
+  const inputBorder = darkMode ? "border-gray-600" : "border-gray-300";
+  const inputBorderFocus = darkMode ? "focus:border-blue-500" : "focus:border-blue-500";
+  const disabledInputBg = darkMode ? "bg-gray-900 text-gray-400" : "bg-gray-100 text-gray-500";
+  const successColor = darkMode ? "text-green-400" : "text-green-600";
+  const errorColor = darkMode ? "text-red-400" : "text-red-600";
+
+  // Editable fields
+  const editableFields = ['firstName', 'lastName', 'phoneNumber', 'contactPerson', 'contactPersonAddress'];
+
+  // Check if field is editable
+  const isEditable = (fieldName) => editableFields.includes(fieldName);
+
+  // PasswordInput component
+  const PasswordInput = React.memo(({ name, value, onChange, placeholder, show, setShow }) => (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        name={name}
+        value={value}
+        onChange={onChange}
+        className={`w-full px-4 py-2.5 pr-10 border ${inputBorder} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+        placeholder={placeholder}
+        required
+        autoComplete="new-password"
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+      >
+        {show ? <FaEyeSlash /> : <FaEye />}
+      </button>
+    </div>
+  ));
+
+  // Password requirement component
+  const PasswordRequirement = React.memo(({ label, isValid }) => (
+    <div className="flex items-center gap-2">
+      {isValid ? (
+        <FaCheck className={`text-sm ${successColor}`} />
+      ) : (
+        <FaTimes className={`text-sm ${errorColor}`} />
+      )}
+      <span className={`text-xs ${isValid ? successColor : 'text-gray-600 dark:text-gray-400'}`}>
+        {label}
+      </span>
+    </div>
+  ));
+
+  // Render field function
+  const renderField = (fieldName, label, icon, value) => {
+    const IconComponent = icon;
+    
+    if (isEditing && isEditable(fieldName)) {
+      return (
+        <div key={fieldName}>
+          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
+            <IconComponent className="text-blue-600 dark:text-blue-400" />
+            {label}
+          </label>
+          <input
+            type="text"
+            name={fieldName}
+            value={editedProfile?.[fieldName] || ""}
+            onChange={handleProfileEdit}
+            className={`w-full px-4 py-2.5 border ${inputBorder} ${inputBorderFocus} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+            autoComplete="off"
+          />
+        </div>
+      );
+    } else {
+      return (
+        <div key={fieldName}>
+          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
+            <IconComponent className="text-blue-600 dark:text-blue-400" />
+            {label}
+            {!isEditable(fieldName) && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                ({language === "am" ? "አይስራም" : "Read-only"})
+              </span>
+            )}
+          </label>
+          <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${!isEditable(fieldName) ? disabledInputBg : inputBg}`}>
+            {value || "-"}
+          </div>
+        </div>
+      );
+    }
+  };
+
+  // Fix: Handle password submit with better state management
   const handlePasswordSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate current password
+    if (!passwordData.currentPassword.trim()) {
+      toast.error(
+        language === "am" 
+          ? "አሁን ያለው የይለፍ ቃል ያስፈልጋል" 
+          : "Current password is required"
+      );
+      return;
+    }
+
+    // Validate new password
+    if (!validatePassword(passwordData.newPassword)) {
+      toast.error(
+        language === "am" 
+          ? "እባክዎን አዲሱ የይለፍ ቃል ሁሉንም የደህንነት መስፈርቶች እንዲያሟላ ያረጋግጡ" 
+          : "Please ensure new password meets all security requirements"
+      );
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       toast.error(
         language === "am" 
@@ -122,18 +447,9 @@ const EmployeeProfile = () => {
       return;
     }
 
-    if (passwordData.newPassword.length < 6) {
-      toast.error(
-        language === "am" 
-          ? "የይለፍ ቃል ቢያንስ 6 ቁምፊዎች ሊኖሩት ይገባል" 
-          : "Password must be at least 6 characters"
-      );
-      return;
-    }
-
     try {
       setIsUpdatingPassword(true);
-      const res = await axiosInstance.put("/employees/update-password", {
+      const response = await axiosInstance.put("/employees/update-password", {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword
       });
@@ -141,24 +457,33 @@ const EmployeeProfile = () => {
       toast.success(
         language === "am" 
           ? "የይለፍ ቃል በተሳካ ሁኔታ ተዘመነ" 
-          : "Password updated successfully"
+          : response.data.message || "Password updated successfully"
       );
       
       setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setShowPasswordForm(false);
+      setPasswordErrors({
+        length: false,
+        uppercase: false,
+        lowercase: false,
+        number: false,
+        special: false
+      });
     } catch (error) {
-      console.error("Error updating password:", error);
+      console.error("Error updating password:", error.response?.data || error);
+      const errorMessage = error.response?.data?.message || error.message;
       toast.error(
-        language === "am" 
+        errorMessage || 
+        (language === "am" 
           ? "የይለፍ ቃል ማዘመን አልተሳካም" 
-          : "Failed to update password"
+          : "Failed to update password")
       );
     } finally {
       setIsUpdatingPassword(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !profile) {
     return (
       <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
         <main className="flex-1 flex items-center justify-center">
@@ -174,61 +499,6 @@ const EmployeeProfile = () => {
   }
 
   const photoUrl = profile?.photo ? `${BACKEND_URL}${profile.photo}` : null;
-
-  // Theme-based colors
-  const mainBg = darkMode ? "bg-gray-900" : "bg-gradient-to-br from-gray-50 to-gray-100";
-  const cardBg = darkMode ? "bg-gray-800 text-gray-100" : "bg-white text-gray-800";
-  const cardBorder = darkMode ? "border-gray-700" : "border-gray-200";
-  const inputBg = darkMode ? "bg-gray-700 text-gray-100" : "bg-gray-50 text-gray-800";
-  const inputBorder = darkMode ? "border-gray-600" : "border-gray-300";
-  const inputBorderFocus = darkMode ? "focus:border-blue-500" : "focus:border-blue-500";
-  const disabledInputBg = darkMode ? "bg-gray-900 text-gray-400" : "bg-gray-100 text-gray-500";
-
-  // Non-editable fields (display only)
-  const nonEditableFields = ['email', 'empId', 'department', 'typeOfPosition', 'salary', 'experience'];
-
-  // Check if field is non-editable
-  const isNonEditable = (fieldName) => nonEditableFields.includes(fieldName);
-
-  // Render field either as input or display div
-  const renderField = (fieldName, label, icon, value) => {
-    const IconComponent = icon;
-    
-    if (isEditing && !isNonEditable(fieldName)) {
-      return (
-        <div>
-          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-            <IconComponent className="text-blue-600 dark:text-blue-400" />
-            {label}
-          </label>
-          <input
-            type="text"
-            name={fieldName}
-            value={editedProfile[fieldName] || ""}
-            onChange={handleProfileEdit}
-            className={`w-full px-4 py-2.5 border ${inputBorder} ${inputBorderFocus} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
-          />
-        </div>
-      );
-    } else {
-      return (
-        <div>
-          <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-            <IconComponent className="text-blue-600 dark:text-blue-400" />
-            {label}
-            {isNonEditable(fieldName) && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                ({language === "am" ? "አይስራም" : "Read-only"})
-              </span>
-            )}
-          </label>
-          <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${isNonEditable(fieldName) ? disabledInputBg : inputBg}`}>
-            {value || "-"}
-          </div>
-        </div>
-      );
-    }
-  };
 
   return (
     <div className="flex min-h-screen">
@@ -250,7 +520,8 @@ const EmployeeProfile = () => {
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                disabled={isLoading}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FaEdit />
                 {language === "am" ? "መገለጫ አስተካክል" : "Edit Profile"}
@@ -259,14 +530,25 @@ const EmployeeProfile = () => {
               <div className="flex gap-3">
                 <button
                   onClick={handleSaveProfile}
-                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+                  disabled={savingProfile || !editedProfile}
+                  className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FaSave />
-                  {language === "am" ? "አስቀምጥ" : "Save Changes"}
+                  {savingProfile ? (
+                    <>
+                      <FaSpinner className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      {language === "am" ? "በማስቀመጥ ላይ..." : "Saving..."}
+                    </>
+                  ) : (
+                    <>
+                      <FaSave />
+                      {language === "am" ? "አስቀምጥ" : "Save Changes"}
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={handleCancelEdit}
-                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
+                  disabled={savingProfile}
+                  className="px-6 py-3 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
                   <FaTimes />
                   {language === "am" ? "ይቅር" : "Cancel"}
@@ -302,14 +584,49 @@ const EmployeeProfile = () => {
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-8">
                   <div className="relative">
                     {photoUrl ? (
-                      <img
-                        src={photoUrl}
-                        alt="Profile"
-                        className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-blue-500 shadow-lg"
-                      />
+                      <div className="relative group">
+                        <img
+                          src={photoUrl}
+                          alt="Profile"
+                          className="w-24 h-24 md:w-32 md:h-32 rounded-full object-cover border-4 border-blue-500 shadow-lg"
+                        />
+                        {isEditing && (
+                          <div 
+                            className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            onClick={handlePhotoUploadClick}
+                          >
+                            <FaCamera className="text-white text-2xl" />
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-3xl md:text-4xl font-bold shadow-lg">
-                        {profile?.firstName?.charAt(0) || "E"}
+                      <div className="relative group">
+                        <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-3xl md:text-4xl font-bold shadow-lg">
+                          {profile?.firstName?.charAt(0) || "E"}
+                        </div>
+                        {isEditing && (
+                          <div 
+                            className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            onClick={handlePhotoUploadClick}
+                          >
+                            <FaCamera className="text-white text-2xl" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Hidden file input */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handlePhotoUpload}
+                      accept="image/*"
+                      className="hidden"
+                    />
+                    
+                    {isUploadingPhoto && (
+                      <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                       </div>
                     )}
                   </div>
@@ -327,28 +644,42 @@ const EmployeeProfile = () => {
                       
                       {isEditing && (
                         <button
-                          onClick={() => {/* Add photo upload functionality */}}
-                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm font-medium transition-colors flex items-center gap-2"
+                          onClick={handlePhotoUploadClick}
+                          disabled={isUploadingPhoto}
+                          className="px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-gray-700 dark:text-gray-300 text-sm font-medium transition-colors flex items-center gap-2 disabled:opacity-50"
                         >
-                          <FaEdit className="text-xs" />
-                          {language === "am" ? "ምስል ቀይር" : "Change Photo"}
+                          {isUploadingPhoto ? (
+                            <>
+                              <FaSpinner className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                              {language === "am" ? "በመጫን ላይ..." : "Uploading..."}
+                            </>
+                          ) : (
+                            <>
+                              <FaCamera className="text-xs" />
+                              {language === "am" ? "ምስል ቀይር" : "Change Photo"}
+                            </>
+                          )}
                         </button>
                       )}
                     </div>
                     
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <div className={`${nonEditableFields.includes('empId') ? disabledInputBg : 'bg-blue-50 dark:bg-blue-900/30'} rounded-lg px-4 py-2`}>
+                      <div className={`${disabledInputBg} rounded-lg px-4 py-2`}>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ሰራተኛ መታወቂያ" : "Employee ID"}
                         </p>
                         <p className="font-semibold text-gray-900 dark:text-white">{profile?.empId || "-"}</p>
                       </div>
                       
-                      <div className={`${nonEditableFields.includes('department') ? disabledInputBg : 'bg-blue-50 dark:bg-blue-900/30'} rounded-lg px-4 py-2`}>
+                      <div className={`${disabledInputBg} rounded-lg px-4 py-2`}>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ክፍል" : "Department"}
                         </p>
-                        <p className="font-semibold text-gray-900 dark:text-white">{profile?.department || "-"}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">
+                          {typeof profile?.department === 'object' 
+                            ? profile.department.name 
+                            : profile?.department || "-"}
+                        </p>
                       </div>
                       
                       <div className="bg-blue-50 dark:bg-blue-900/30 rounded-lg px-4 py-2">
@@ -402,7 +733,9 @@ const EmployeeProfile = () => {
                       'department',
                       language === "am" ? "የክፍል ስም" : "Department",
                       FaBuilding,
-                      profile?.department
+                      typeof profile?.department === 'object' 
+                        ? profile.department.name 
+                        : profile?.department || "-"
                     )}
                   </div>
 
@@ -433,12 +766,23 @@ const EmployeeProfile = () => {
                     )}
 
                     {/* Experience - Non-editable */}
-                    {renderField(
-                      'experience',
-                      language === "am" ? "ልምድ" : "Experience",
-                      FaFileAlt,
-                      profile?.experience
-                    )}
+                    <div>
+                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
+                        <FaFileAlt className="text-blue-600 dark:text-blue-400" />
+                        {language === "am" ? "ልምድ" : "Experience"}
+                        <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                          ({language === "am" ? "አይስራም" : "Read-only"})
+                        </span>
+                      </label>
+                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${disabledInputBg}`}>
+                        {getExperienceValue()}
+                        {profile?.startDate && (
+                          <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            {language === "am" ? "ከሚከተለው ቀን ጀምሮ" : "Since"} {new Date(profile.startDate).toLocaleDateString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Contact Person - Editable */}
                     {renderField(
@@ -501,15 +845,13 @@ const EmployeeProfile = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {language === "am" ? "የአሁኑ የይለፍ ቃል" : "Current Password"}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         name="currentPassword"
                         value={passwordData.currentPassword}
                         onChange={handlePasswordChange}
-                        className={`w-full px-4 py-2.5 border ${inputBorder} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         placeholder="••••••••"
-                        required
-                        autoComplete="current-password"
+                        show={showCurrentPassword}
+                        setShow={setShowCurrentPassword}
                       />
                     </div>
 
@@ -517,44 +859,63 @@ const EmployeeProfile = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {language === "am" ? "አዲስ የይለፍ ቃል" : "New Password"}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         name="newPassword"
                         value={passwordData.newPassword}
                         onChange={handlePasswordChange}
-                        className={`w-full px-4 py-2.5 border ${inputBorder} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         placeholder="••••••••"
-                        required
-                        autoComplete="new-password"
-                        minLength={6}
+                        show={showNewPassword}
+                        setShow={setShowNewPassword}
                       />
+                      
+                      {/* Password Requirements */}
+                      <div className="mt-3 space-y-1">
+                        <PasswordRequirement
+                          label={language === "am" ? "ቢያንስ 6 ቁምፊዎች" : "At least 6 characters"}
+                          isValid={passwordErrors.length}
+                        />
+                        <PasswordRequirement
+                          label={language === "am" ? "አንድ አቢይ ፊደል (A-Z)" : "One uppercase letter (A-Z)"}
+                          isValid={passwordErrors.uppercase}
+                        />
+                        <PasswordRequirement
+                          label={language === "am" ? "አንድ ትንሽ ፊደል (a-z)" : "One lowercase letter (a-z)"}
+                          isValid={passwordErrors.lowercase}
+                        />
+                        <PasswordRequirement
+                          label={language === "am" ? "አንድ ቁጥር (0-9)" : "One number (0-9)"}
+                          isValid={passwordErrors.number}
+                        />
+                        <PasswordRequirement
+                          label={language === "am" ? "አንድ ልዩ ምልክት (!@#$%^&*)" : "One special character (!@#$%^&*)"}
+                          isValid={passwordErrors.special}
+                        />
+                      </div>
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {language === "am" ? "አዲስ የይለፍ ቃል አረጋግጥ" : "Confirm New Password"}
                       </label>
-                      <input
-                        type="password"
+                      <PasswordInput
                         name="confirmPassword"
                         value={passwordData.confirmPassword}
                         onChange={handlePasswordChange}
-                        className={`w-full px-4 py-2.5 border ${inputBorder} rounded-lg ${inputBg} focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         placeholder="••••••••"
-                        required
-                        autoComplete="new-password"
+                        show={showConfirmPassword}
+                        setShow={setShowConfirmPassword}
                       />
                     </div>
 
                     <div className="flex gap-3 pt-2">
                       <button
                         type="submit"
-                        disabled={isUpdatingPassword}
+                        disabled={isUpdatingPassword || !Object.values(passwordErrors).every(Boolean)}
                         className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isUpdatingPassword ? (
                           <>
-                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <FaSpinner className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                             {language === "am" ? "በመዘመን ላይ..." : "Updating..."}
                           </>
                         ) : (
@@ -573,6 +934,13 @@ const EmployeeProfile = () => {
                             currentPassword: "", 
                             newPassword: "",
                             confirmPassword: ""
+                          });
+                          setPasswordErrors({
+                            length: false,
+                            uppercase: false,
+                            lowercase: false,
+                            number: false,
+                            special: false
                           });
                         }}
                         className="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
@@ -609,26 +977,38 @@ const EmployeeProfile = () => {
                 {!showPasswordForm && (
                   <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
-                      {language === "am" ? "የደህንነት ምክሮች" : "Security Tips"}
+                      {language === "am" ? "የደህንነት መስፈርቶች" : "Security Requirements"}
                     </h4>
                     <ul className="space-y-2">
                       <li className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
                         <FaCheck className="text-green-500 mt-0.5 flex-shrink-0" />
                         {language === "am" 
-                          ? "ለሌሎች አገልግሎቶች የሚጠቀሙት የይለፍ ቃል አይጠቀሙ" 
-                          : "Don't reuse passwords from other services"}
+                          ? "ቢያንስ 6 ቁምፊዎች" 
+                          : "At least 6 characters"}
                       </li>
                       <li className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
                         <FaCheck className="text-green-500 mt-0.5 flex-shrink-0" />
                         {language === "am" 
-                          ? "ቢያንስ በየስድስት ወሩ የይለፍ ቃልዎን ይቀይሩ" 
-                          : "Change your password at least every 6 months"}
+                          ? "አንድ አቢይ ፊደል (A-Z)" 
+                          : "One uppercase letter (A-Z)"}
                       </li>
                       <li className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
                         <FaCheck className="text-green-500 mt-0.5 flex-shrink-0" />
                         {language === "am" 
-                          ? "ቁጥሮች፣ ፊደላት እና ምልክቶችን ያካትቱ" 
-                          : "Include numbers, letters, and symbols"}
+                          ? "አንድ ትንሽ ፊደል (a-z)" 
+                          : "One lowercase letter (a-z)"}
+                      </li>
+                      <li className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <FaCheck className="text-green-500 mt-0.5 flex-shrink-0" />
+                        {language === "am" 
+                          ? "አንድ ቁጥር (0-9)" 
+                          : "One number (0-9)"}
+                      </li>
+                      <li className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <FaCheck className="text-green-500 mt-0.5 flex-shrink-0" />
+                        {language === "am" 
+                          ? "አንድ ልዩ ምልክት (!@#$%^&*)" 
+                          : "One special character (!@#$%^&*)"}
                       </li>
                     </ul>
                   </div>

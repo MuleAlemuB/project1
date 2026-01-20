@@ -103,9 +103,22 @@ export const getEmployeesByDepartment = asyncHandler(async (req, res) => {
 });
 
 // -------------------- Employee Dashboard Route --------------------
+// In your employeeController.js, update the dashboard function:
+
+// -------------------- Employee Dashboard Route --------------------
 export const getEmployeeDashboard = asyncHandler(async (req, res) => {
   const employee = await Employee.findById(req.user._id).populate("department", "name");
   if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+  // Format the date for display
+  let joinDateDisplay = "-";
+  if (employee.startDate) {
+    joinDateDisplay = new Date(employee.startDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
 
   // Send every field except password
   const dashboardData = {
@@ -125,16 +138,35 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     requisitionsPending: employee.requisitionsPending || 0,
     placementStatus: employee.placementStatus || "Not Placed",
     photo: employee.photo || null,
+    startDate: employee.startDate, // Add this
+    joinDate: joinDateDisplay, // This is the formatted display date
     profileCompleted: Math.round(
       ((employee.firstName && employee.lastName && employee.email) ? 100 : 50)
     ),
-    // Add startDate to dashboard if needed
-    startDate: employee.startDate,
   };
 
   res.json(dashboardData);
 });
 
+// Helper function for profile completion
+const calculateProfileCompletion = (employee) => {
+  const fields = [
+    'firstName', 'lastName', 'email', 'empId', 'department',
+    'phoneNumber', 'contactPerson', 'contactPersonAddress',
+    'photo', 'dateOfBirth', 'address'
+  ];
+  
+  let completed = 0;
+  let total = fields.length;
+  
+  fields.forEach(field => {
+    if (employee[field] && employee[field].toString().trim() !== '') {
+      completed++;
+    }
+  });
+  
+  return Math.round((completed / total) * 100);
+};
 // -------------------- Employee Updates Password Only --------------------
 export const updatePassword = asyncHandler(async (req, res) => {
   const employeeId = req.user._id; // coming from authMiddleware's `protect`

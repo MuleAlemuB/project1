@@ -150,5 +150,58 @@ router.get(
     res.json(employee);
   })
 );
+// -------------------- Update Own Profile --------------------
+router.put(
+  "/update-profile",
+  protect,
+  upload.single("photo"),
+  asyncHandler(async (req, res) => {
+    const user = await Employee.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // Only allow updating these specific fields
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+    user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
+    user.contactPerson = req.body.contactPerson || user.contactPerson;
+    user.contactPersonAddress = req.body.contactPersonAddress || user.contactPersonAddress;
+
+    if (req.file) {
+      user.photo = `/uploads/photos/${req.file.filename}`;
+    }
+
+    const updated = await user.save();
+    const populatedUser = await Employee.findById(updated._id)
+      .populate("department", "name");
+
+    res.json(populatedUser);
+  })
+);
+// -------------------- Upload Profile Photo --------------------
+router.post(
+  "/upload-photo",
+  protect,
+  upload.single("photo"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      res.status(400);
+      throw new Error("No photo uploaded");
+    }
+
+    const user = await Employee.findById(req.user._id);
+    if (!user) {
+      res.status(404);
+      throw new Error("User not found");
+    }
+
+    user.photo = `/uploads/photos/${req.file.filename}`;
+    await user.save();
+
+    res.json({
+      message: "Photo uploaded successfully",
+      photoUrl: user.photo
+    });
+  })
+);
 
 export default router;

@@ -4,7 +4,6 @@ import {
   FaTachometerAlt, 
   FaCalendarAlt, 
   FaBell, 
-  FaFileAlt, 
   FaUser,
   FaHome
 } from "react-icons/fa";
@@ -38,7 +37,7 @@ const EmployeeSidebar = () => {
       icon: <FaBell className="w-5 h-5" />,
     },
     {
-      name: language === "am" ? "የስራ ልምድ ጥያቄ" : "Work Experience",
+      name: language === "am" ? "የስራ ልምድ" : "Work Experience",
       path: "/employee/work-experience",
       icon: <MdWork className="w-5 h-5" />,
     },
@@ -50,27 +49,27 @@ const EmployeeSidebar = () => {
   ];
 
   return (
-    <div className={`flex flex-col h-screen w-64 transition-all duration-300
+    <div className={`flex flex-col h-screen w-64 transition-colors duration-200
       ${darkMode 
-        ? "bg-gradient-to-b from-gray-900 to-gray-800 text-gray-100" 
-        : "bg-gradient-to-b from-white to-gray-50 text-gray-800 shadow-lg"
+        ? "bg-gray-900 text-gray-100" 
+        : "bg-white text-gray-800 border-r border-gray-100"
       }`}>
       
-      {/* Header */}
-      <div className="px-6 py-8">
-        <div className="flex flex-col items-center space-y-4">
-          <div className={`p-4 rounded-2xl shadow-lg ${
-            darkMode ? 'bg-gradient-to-br from-blue-900/40 to-blue-800/40' : 'bg-gradient-to-br from-blue-100 to-blue-50'
+      {/* Header - Simplified */}
+      <div className="px-6 py-6">
+        <div className="flex items-center gap-3">
+          <div className={`p-3 rounded-lg ${
+            darkMode ? 'bg-gray-800' : 'bg-blue-50'
           }`}>
-            <FaHome className={`h-8 w-8 ${
+            <FaHome className={`h-6 w-6 ${
               darkMode ? 'text-blue-400' : 'text-blue-600'
             }`} />
           </div>
-          <div className="text-center">
-            <h1 className="text-xl font-bold tracking-tight">
+          <div>
+            <h1 className="text-lg font-semibold">
               {language === "am" ? "ሰራተኛ ፓነል" : "Employee Panel"}
             </h1>
-            <p className={`text-sm mt-1 ${
+            <p className={`text-xs mt-0.5 ${
               darkMode ? 'text-gray-400' : 'text-gray-600'
             }`}>
               {language === "am" ? "የስራ አስተዳደር" : "Work Management"}
@@ -79,9 +78,9 @@ const EmployeeSidebar = () => {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-4 py-4">
-        <div className="space-y-2">
+      {/* Navigation - Cleaner */}
+      <nav className="flex-1 px-3 py-4">
+        <div className="space-y-1">
           {links.map((link) => {
             const isActive = activeLink === link.path;
             return (
@@ -90,29 +89,27 @@ const EmployeeSidebar = () => {
                 to={link.path}
                 onClick={() => setActiveLink(link.path)}
                 className={`
-                  flex items-center gap-4 px-5 py-3.5 rounded-xl
-                  transition-all duration-300 transform
+                  flex items-center gap-3 px-4 py-3 rounded-lg
+                  transition-colors duration-200
                   ${isActive
                     ? darkMode
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg scale-[1.02]'
-                      : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg scale-[1.02]'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-600 border border-blue-100'
                     : darkMode
-                      ? 'hover:bg-gray-800/70 hover:scale-[1.01] hover:shadow-md'
-                      : 'hover:bg-gray-100 hover:scale-[1.01] hover:shadow-md'
+                      ? 'hover:bg-gray-800 text-gray-300'
+                      : 'hover:bg-gray-50 text-gray-600'
                   }
                 `}
               >
-                <div className={`transition-transform duration-300 ${
-                  isActive ? 'scale-110' : ''
-                }`}>
+                <div className={isActive && !darkMode ? 'text-blue-600' : ''}>
                   {link.icon}
                 </div>
-                <span className="font-medium tracking-wide">{link.name}</span>
+                <span className="font-medium text-sm">{link.name}</span>
                 
                 {isActive && (
                   <div className="ml-auto">
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      darkMode ? 'bg-white/80' : 'bg-white'
+                    <div className={`w-2 h-2 rounded-full ${
+                      darkMode ? 'bg-white' : 'bg-blue-500'
                     }`}></div>
                   </div>
                 )}
@@ -122,34 +119,34 @@ const EmployeeSidebar = () => {
         </div>
       </nav>
 
-      {/* Footer */}
-      <div className={`p-6 border-t ${
-        darkMode ? 'border-gray-800' : 'border-gray-200'
+      {/* Footer - Minimal */}
+      <div className={`p-4 mt-auto border-t ${
+        darkMode ? 'border-gray-800' : 'border-gray-100'
       }`}>
-        <div className="flex flex-col items-center space-y-3">
-          <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full animate-pulse ${
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${
               darkMode ? 'bg-green-500' : 'bg-green-400'
             }`}></div>
-            <span className={`text-sm font-medium ${
+            <span className={`text-xs font-medium ${
               darkMode ? 'text-green-400' : 'text-green-600'
             }`}>
               {language === "am" ? "ንቁ" : "Active"}
             </span>
           </div>
-          <p className={`text-xs ${
-            darkMode ? 'text-gray-500' : 'text-gray-400'
-          } text-center`}>
-            {language === "am" 
-              ? "የዲቢቲዩ ሰብአዊ ሀብት ማኔጅመንት ሲስተም" 
-              : "DTU HR Management System"}
-          </p>
-          <div className={`text-xs px-3 py-1 rounded-full ${
-            darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-200 text-gray-600'
+          <div className={`text-xs px-2 py-1 rounded ${
+            darkMode ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'
           }`}>
             v2.0
           </div>
         </div>
+        <p className={`text-xs mt-2 ${
+          darkMode ? 'text-gray-500' : 'text-gray-400'
+        }`}>
+          {language === "am" 
+            ? "DTU HRMS" 
+            : "DTU HRMS"}
+        </p>
       </div>
     </div>
   );

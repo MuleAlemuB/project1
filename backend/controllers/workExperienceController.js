@@ -22,6 +22,8 @@ import Department from "../models/Department.js";
  * @route  POST /api/work-experience
  * @access Employee / DepartmentHead
  */
+// In your work experience controller, update the createWorkExperienceRequest function:
+
 export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   console.log('📥 Request body:', req.body);
   console.log('📁 Request file:', req.file);
@@ -84,21 +86,20 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   const fullName = populatedRequest.fullName || 
     `${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`.trim();
 
-  // Find admins
-  const admins = await Employee.find({ role: "admin" });
+  // ✅ FIX: Find ONLY ADMINS and Department Heads (NOT the employee themselves)
+  const admins = await Employee.find({ 
+    role: { $in: ["admin", "departmenthead"] },
+    _id: { $ne: req.user._id } // Exclude the employee who made the request
+  });
   
-  // Create notifications for admins
+  // Create notifications for admins and department heads only
   const notificationPromises = admins.map(admin =>
     Notification.create({
       type: "Work Experience Request",
       message: `${fullName} has requested a work experience letter`,
       seen: false,
-      employee: {
-        name: fullName,
-        email: employee.email,
-        empId: employee.empId
-      },
-      recipientRole: "Admin",
+      user: admin._id, // Send to admin/department head
+      recipientRole: admin.role === "admin" ? "Admin" : "DepartmentHead",
       relatedId: request._id,
       relatedModel: "WorkExperienceRequest",
       status: "pending",
@@ -110,12 +111,39 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
         reason: reason,
         createdAt: request.createdAt,
         status: "pending",
-        requestLetter: requestLetterPath
+        requestLetter: requestLetterPath,
+        // Add requester info so admins know who made the request
+        requesterId: employee._id,
+        requesterEmail: employee.email
       }
     })
   );
 
   await Promise.all(notificationPromises);
+
+  // ✅ FIX: Also create a notification for the EMPLOYEE (confirmation only, not the request)
+  await Notification.create({
+    type: "Work Experience Request",
+    message: "Your work experience request has been submitted successfully",
+    seen: false,
+    user: req.user._id, // Send to the employee who made the request
+    recipientRole: "Employee",
+    relatedId: request._id,
+    relatedModel: "WorkExperienceRequest",
+    status: "pending",
+    metadata: {
+      employeeName: fullName,
+      employeeEmail: employee.email,
+      employeeEmpId: employee.empId,
+      department: departmentName,
+      reason: reason,
+      createdAt: request.createdAt,
+      status: "pending",
+      requestLetter: requestLetterPath,
+      // This is just for confirmation
+      isConfirmation: true
+    }
+  });
 
   res.status(201).json({
     success: true,
