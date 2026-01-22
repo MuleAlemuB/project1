@@ -57,7 +57,7 @@ const leaveRequestSchema = new mongoose.Schema(
       required: true,
     },
 
-     attachments: [{
+    attachments: [{
       name: { type: String, required: true },
       url: { type: String, required: true }
     }],
@@ -66,6 +66,12 @@ const leaveRequestSchema = new mongoose.Schema(
       type: String,
       enum: ["pending", "approved", "rejected"],
       default: "pending",
+    },
+
+    // ADD THIS FIELD for rejection reason
+    rejectionReason: {
+      type: String,
+      default: ""
     },
   },
   { timestamps: true }

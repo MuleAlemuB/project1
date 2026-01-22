@@ -175,6 +175,7 @@ const DeptHeadNotifications = () => {
 
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [detailsOpen, setDetailsOpen] = useState({});
   const [activeFilter, setActiveFilter] = useState("all");
   const [expandedAll, setExpandedAll] = useState(false);
@@ -186,91 +187,128 @@ const DeptHeadNotifications = () => {
   const unreadCount = notifications.filter(n => !n.seen).length;
   const readCount = notifications.filter(n => n.seen).length;
 
-  // Fetch notifications for department head - FIXED
+  // Fetch notifications for department head
   const fetchNotifications = async () => {
-    if (!user) return;
+  console.log("=== STARTING NOTIFICATION FETCH ===");
+  
+  if (!user) {
+    console.log("No user found, cannot fetch notifications");
+    setNotifications([]);
+    setLoading(false);
+    return;
+  }
+  
+  // Check if user is department head
+  if (user.role.toLowerCase() !== "departmenthead") {
+    console.log("User is not department head, role:", user.role);
+    setNotifications([]);
+    setLoading(false);
+    return;
+  }
+  
+  console.log("User details:", {
+    id: user._id,
+    role: user.role,
+    department: user.department,
+    departmentName: user.departmentName,
+    email: user.email
+  });
+  
+  try {
+    console.log("Calling /notifications/my endpoint...");
+    const res = await axiosInstance.get("/notifications/my");
     
-    try {
-      console.log("Fetching notifications for department head:", user._id);
-      console.log("User role:", user.role);
+    console.log("API Response status:", res.status);
+    console.log("API Response data count:", res.data?.length);
+    
+    if (res.data && Array.isArray(res.data)) {
+      console.log(`Received ${res.data.length} notifications for this department head`);
       
-      // FIXED: Always use the general notifications endpoint
-      const res = await axiosInstance.get("/notifications/my");
-      console.log("Fetched notifications:", res.data);
+      // Log sample notifications for debugging
+      if (res.data.length > 0) {
+        console.log("Sample notification:", JSON.stringify(res.data[0], null, 2));
+      }
       
-      // Filter to show only department head notifications
-      const deptHeadNotifications = Array.isArray(res.data) 
-        ? res.data.filter(notification => 
-            notification.recipientRole === "DepartmentHead" || 
-            notification.recipientRole === "departmenthead"
-          )
-        : [];
-      
-      console.log("Filtered department head notifications:", deptHeadNotifications);
-      setNotifications(deptHeadNotifications);
-    } catch (err) {
-      console.error("Error fetching notifications:", err);
-      console.error("Error details:", err.response?.data);
+      // REMOVE THE FILTERING - backend already handles it
+      // Just set the notifications directly
+      setNotifications(res.data);
+      setError(null);
+    } else {
+      console.log("Response data is not an array:", res.data);
       setNotifications([]);
-    } finally {
-      setLoading(false);
     }
-  };
+  } catch (err) {
+    console.error("Error fetching notifications:", err);
+    console.error("Error response:", err.response?.data);
+    console.error("Error status:", err.response?.status);
+    
+    setError(err.response?.data?.message || "Failed to load notifications");
+    setNotifications([]);
+  } finally {
+    console.log("Setting loading to false");
+    setLoading(false);
+  }
+};
 
   useEffect(() => {
+    console.log("useEffect triggered, authLoading:", authLoading, "user:", user);
+    
     if (!authLoading && user) {
+      console.log("User loaded, fetching notifications...");
       fetchNotifications();
+    } else if (!authLoading && !user) {
+      console.log("No user found, stopping loading");
+      setLoading(false);
     }
   }, [user, authLoading]);
 
   const handleMarkSeen = async (id) => {
     try {
-      // FIXED: Always use the general notification endpoint
       await axiosInstance.put(`/notifications/${id}/seen`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, seen: true } : n))
       );
     } catch (err) {
       console.error("Error marking as seen:", err);
+      alert("Failed to mark notification as read");
     }
   };
 
   const handleMarkAllRead = async () => {
     if (!window.confirm(t.markAllReadConfirm)) return;
     try {
-      // FIXED: Always use the general endpoint
       await axiosInstance.put("/notifications/mark-all-read");
       setNotifications(prev => prev.map(n => ({ ...n, seen: true })));
     } catch (err) {
       console.error("Error marking all as read:", err);
+      alert("Failed to mark all notifications as read");
     }
   };
 
   const handleDelete = async (id) => {
     try {
-      // FIXED: Always use the general endpoint
       await axiosInstance.delete(`/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n._id !== id));
     } catch (err) {
       console.error("Error deleting notification:", err);
+      alert("Failed to delete notification");
     }
   };
 
   const handleDeleteAllRead = async () => {
     if (!window.confirm(t.deleteAllConfirm)) return;
     try {
-      // FIXED: Always use the general endpoint
       await axiosInstance.delete("/notifications/clear-read");
       setNotifications(prev => prev.filter(n => !n.seen));
     } catch (err) {
       console.error("Error deleting all read:", err);
+      alert("Failed to delete read notifications");
     }
   };
 
   const handleDeleteAll = async () => {
     if (!window.confirm(language === "en" ? "Delete all notifications?" : "ሁሉንም ማሳወቂያዎች ማጥፋት ትፈልጋለህ?")) return;
     try {
-      // Delete all notifications one by one using the general endpoint
       const deletePromises = notifications.map(n => 
         axiosInstance.delete(`/notifications/${n._id}`)
       );
@@ -278,6 +316,7 @@ const DeptHeadNotifications = () => {
       setNotifications([]);
     } catch (err) {
       console.error("Error deleting all:", err);
+      alert("Failed to delete all notifications");
     }
   };
 
@@ -310,21 +349,53 @@ const DeptHeadNotifications = () => {
     return `${diffDays}${t.days} ${t.timeAgo}`;
   };
 
+  // Show loading state
   if (authLoading || loading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gradient-to-br from-gray-900 to-gray-800" : "bg-gradient-to-br from-gray-50 to-gray-100"}`}>
         <div className="text-center">
           <div className={`w-16 h-16 border-4 rounded-full animate-spin mx-auto ${darkMode ? "border-blue-500 border-t-blue-300" : "border-blue-600 border-t-blue-200"}`}></div>
           <p className={`mt-6 text-lg font-medium ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.loading}</p>
+          <p className={`mt-2 text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            Loading notifications for your department...
+          </p>
         </div>
       </div>
     );
   }
 
+  // Check authorization
   if (!user || user.role.toLowerCase() !== "departmenthead") {
     return (
       <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gradient-to-br from-gray-900 to-gray-800" : "bg-gradient-to-br from-gray-50 to-gray-100"}`}>
-        <p className={`text-lg ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.notAuthorized}</p>
+        <div className="text-center">
+          <FaExclamationTriangle className={`w-12 h-12 mx-auto mb-4 ${darkMode ? "text-yellow-400" : "text-yellow-500"}`} />
+          <p className={`text-lg ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.notAuthorized}</p>
+          <p className={`text-sm mt-2 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+            You need department head privileges to access this page
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if there's an error
+  if (error) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gradient-to-br from-gray-900 to-gray-800" : "bg-gradient-to-br from-gray-50 to-gray-100"}`}>
+        <div className="text-center max-w-md">
+          <FaExclamationTriangle className={`w-12 h-12 mx-auto mb-4 ${darkMode ? "text-red-400" : "text-red-500"}`} />
+          <h3 className={`text-xl font-semibold mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            Error Loading Notifications
+          </h3>
+          <p className={`mb-4 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{error}</p>
+          <button
+            onClick={fetchNotifications}
+            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -342,9 +413,14 @@ const DeptHeadNotifications = () => {
               <p className={`mt-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                 {notifications.length} {t.notificationCount} • {unreadCount} {t.newNotifications}
               </p>
-              <p className={`text-sm mt-1 ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
-                <FaBuilding className="inline mr-2" />
-                {t.forYourDepartment}
+              <div className="flex items-center gap-2 mt-1">
+                <FaBuilding className={`${darkMode ? "text-blue-400" : "text-blue-600"}`} />
+                <span className={`text-sm ${darkMode ? "text-blue-300" : "text-blue-600"}`}>
+                  {t.forYourDepartment}: {user?.departmentName || user?.department || "Your Department"}
+                </span>
+              </div>
+              <p className={`text-xs mt-1 ${darkMode ? "text-gray-500" : "text-gray-400"}`}>
+                Showing notifications specifically for you as department head
               </p>
             </div>
 
@@ -397,9 +473,9 @@ const DeptHeadNotifications = () => {
           <div className={`rounded-2xl p-6 ${darkMode ? "bg-green-900/20 border border-green-800/30" : "bg-green-50 border border-green-100 shadow-lg"}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm ${darkMode ? "text-green-300" : "text-green-600"}`}>{language === "en" ? "Leave Requests" : "የፈቃድ ጥያቄዎች"}</p>
+                <p className={`text-sm ${darkMode ? "text-green-300" : "text-green-600"}`}>{t.leaveRequest}</p>
                 <p className="text-3xl font-bold mt-2">
-                  {notifications.filter(n => n.type === "Leave Request" || n.type === "Leave").length}
+                  {notifications.filter(n => n.type === "Leave" || n.type === "Leave Request").length}
                 </p>
               </div>
               <div className={`p-3 rounded-xl ${darkMode ? "bg-green-800/40" : "bg-green-200"}`}>
@@ -477,6 +553,13 @@ const DeptHeadNotifications = () => {
                   {t.clearAll}
                 </button>
               )}
+              <button
+                onClick={fetchNotifications}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all flex items-center gap-2 shadow-lg"
+              >
+                <FaCheck />
+                Refresh
+              </button>
             </div>
           </div>
         </div>
@@ -490,9 +573,23 @@ const DeptHeadNotifications = () => {
             <h3 className={`text-xl font-semibold mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
               {activeFilter === "unread" ? t.noUnread : t.noNotifications}
             </h3>
-            <p className={`${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-              {activeFilter === "unread" ? t.allCaughtUp : t.noNotifications}
+            <p className={`mb-6 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+              {activeFilter === "unread" ? t.allCaughtUp : "No notifications found for your department"}
             </p>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={fetchNotifications}
+                className={`px-4 py-2 rounded-lg transition-all ${darkMode ? "bg-gray-700 hover:bg-gray-600 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-700"}`}
+              >
+                Refresh Notifications
+              </button>
+              <a
+                href="/depthead/leave-requests"
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg transition-all"
+              >
+                Go to Leave Management
+              </a>
+            </div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -523,7 +620,7 @@ const DeptHeadNotifications = () => {
                                 {t.unread}
                               </span>
                             )}
-                            {notification.metadata?.actionRequired && (
+                            {notification.metadata?.status === "pending" && (
                               <span className="px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-medium">
                                 {t.actionRequired}
                               </span>
@@ -542,6 +639,10 @@ const DeptHeadNotifications = () => {
                               {notification.metadata.department}
                             </p>
                           )}
+                          {/* Debug info - remove in production */}
+                          <p className={`text-xs mt-1 ${darkMode ? "text-gray-600" : "text-gray-400"}`}>
+                            ID: {notification._id} • Dept: {notification.department || "N/A"} • For: {notification.recipientId ? "Specific User" : "All Dept Heads"}
+                          </p>
                         </div>
                       </div>
                       
@@ -602,6 +703,8 @@ const getNotificationIcon = (type) => {
     return FaUser;
   } else if (type === "System") {
     return FaBell;
+  } else if (type === "Requisition") {
+    return FaFileSignature;
   } else {
     return FaBell;
   }
@@ -614,13 +717,14 @@ const getNotificationColorClasses = (type, darkMode) => {
     return darkMode ? "bg-purple-900/40 text-purple-400" : "bg-purple-100 text-purple-700";
   } else if (type === "urgent") {
     return darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700";
+  } else if (type === "Requisition") {
+    return darkMode ? "bg-orange-900/40 text-orange-400" : "bg-orange-100 text-orange-700";
   } else {
     return darkMode ? "bg-gray-900/40 text-gray-400" : "bg-gray-100 text-gray-700";
   }
 };
 
 const getNotificationTypeLabel = (type, t) => {
-  // Use the correct language object
   const language = localStorage.getItem('language') || 'en';
   
   if (type === "Leave Request" || type === "Leave Status Update" || type === "Leave") return t.leaveRequest;
@@ -628,6 +732,7 @@ const getNotificationTypeLabel = (type, t) => {
   if (type === "Employee Terminated") return language === "en" ? "Employee Terminated" : "ሰራተኛ ተሰርዟል";
   if (type === "System") return t.general;
   if (type === "urgent") return t.urgent;
+  if (type === "Requisition") return language === "en" ? "Requisition Request" : "የፍቃድ ጥያቄ";
   return type || t.general;
 };
 
@@ -668,7 +773,7 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
             <DetailItem
               icon={FaCheckCircle}
               label={t.status}
-              value={metadata?.status ? t[metadata.status] : t.pending}
+              value={metadata?.status ? t[metadata.status] || metadata.status : t.pending}
               darkMode={darkMode}
             />
           </div>
@@ -739,7 +844,6 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
               value={metadata?.employeeName || notification.message?.split(' ')[1] + ' ' + notification.message?.split(' ')[2]}
               darkMode={darkMode}
             />
-            
             <DetailItem
               icon={FaBuilding}
               label={t.department}
@@ -805,7 +909,7 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
           </div>
         </div>
         
-        {notification.message && (
+        if (notification.message && (
           <div className="mt-6 pt-6 border-t border-gray-700 dark:border-gray-600">
             <DetailItem
               icon={FaFileAlt}
@@ -813,6 +917,95 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
               value={notification.message}
               darkMode={darkMode}
             />
+          </div>
+        )
+      </div>
+    );
+  }
+  
+  if (type === "Requisition") {
+    return (
+      <div className={`mt-6 p-6 rounded-xl ${darkMode ? "bg-orange-900/10" : "bg-orange-50"}`}>
+        <h4 className={`font-semibold mb-4 text-lg ${darkMode ? "text-orange-300" : "text-orange-700"}`}>
+          <FaFileSignature className="inline mr-2" />
+          {language === "en" ? "Requisition Details" : "የፍቃድ ዝርዝር"}
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <DetailItem
+              icon={FaUser}
+              label={t.employee}
+              value={metadata?.requesterName || "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaBuilding}
+              label={t.department}
+              value={metadata?.department || "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaBriefcase}
+              label={t.position}
+              value={metadata?.position || "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaCheckCircle}
+              label={t.status}
+              value={metadata?.status ? t[metadata.status] || metadata.status : t.pending}
+              darkMode={darkMode}
+            />
+          </div>
+          
+          <div className="space-y-4">
+            <DetailItem
+              icon={FaCalendarAlt}
+              label={language === "en" ? "Request Date" : "የጥያቄ ቀን"}
+              value={metadata?.requestDate ? formatDate(metadata.requestDate) : "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaUsers}
+              label={language === "en" ? "Quantity" : "ብዛት"}
+              value={metadata?.quantity || "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaFileAlt}
+              label={language === "en" ? "Justification" : "ምክንያት"}
+              value={metadata?.justification || "N/A"}
+              darkMode={darkMode}
+            />
+            
+            {metadata?.priority && (
+              <DetailItem
+                icon={FaExclamationTriangle}
+                label={language === "en" ? "Priority" : "ቅድሚያ"}
+                value={metadata.priority}
+                darkMode={darkMode}
+              />
+            )}
+          </div>
+        </div>
+        
+        {metadata?.status === "pending" && (
+          <div className="mt-6 pt-6 border-t border-gray-700 dark:border-gray-600">
+            <p className={`font-semibold mb-3 ${darkMode ? "text-yellow-300" : "text-yellow-600"}`}>
+              <FaExclamationTriangle className="inline mr-2" />
+              {t.actionRequired}
+            </p>
+            <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              {language === "en" 
+                ? "This requisition requires your review. Please process it in the Requisition Management section."
+                : "ይህ ፍቃድ የእርስዎ ግምገማ ያስፈልገዋል። እባክዎን በፍቃድ አስተዳደር ክፍል ውስጥ ያስተናግዱት።"}
+            </p>
           </div>
         )}
       </div>
@@ -850,6 +1043,15 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
               darkMode={darkMode}
             />
           )}
+          
+          {notification.recipientId && (
+            <DetailItem
+              icon={FaUser}
+              label="Recipient ID"
+              value={notification.recipientId}
+              darkMode={darkMode}
+            />
+          )}
         </div>
         
         <div className="space-y-4">
@@ -869,9 +1071,8 @@ const renderNotificationDetails = (notification, t, darkMode, language) => {
 };
 
 const DetailItem = ({ icon: Icon, label, value, darkMode }) => {
-  // Handle case where Icon might be undefined
   if (!Icon) {
-    Icon = FaInfoCircle; // Default icon
+    Icon = FaInfoCircle;
   }
   
   return (
@@ -895,7 +1096,6 @@ const DetailItem = ({ icon: Icon, label, value, darkMode }) => {
   );
 };
 
-// Helper functions used in renderNotificationDetails
 const formatDate = (dateString) => {
   if (!dateString) return "N/A";
   const date = new Date(dateString);

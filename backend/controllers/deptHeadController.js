@@ -3,6 +3,14 @@ import LeaveRequest from "../models/LeaveRequest.js";
 import Notification from "../models/Notification.js";
 import bcrypt from "bcryptjs";
 import asyncHandler from "express-async-handler";
+import fs from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // ================================
 // 1. GET Department Head Profile (UPDATED)
@@ -152,18 +160,18 @@ export const getDeptStats = asyncHandler(async (req, res) => {
     status: "pending"
   });
 
-  const notifications = await Notification.countDocuments({
+  // Count only unread notifications for department head
+  const notificationsCount = await Notification.countDocuments({
     $or: [
       { recipient: req.user._id, seen: false },
-      { recipientRole: "DepartmentHead", seen: false },
-      { recipientRole: "departmenthead", seen: false }
+      { recipientRole: "departmenthead", seen: false, "metadata.departmentId": deptHead.department?._id }
     ]
   });
 
   res.status(200).json({
     totalEmployees,
     pendingLeaves,
-    notifications,
+    notifications: notificationsCount,
     department: deptName
   });
 });
@@ -428,17 +436,9 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
     notification
   });
 });
+
 // ================================
 // UPDATE Employee by Department Head
-// ================================
-// ================================
-// UPDATE Employee by Department Head - FIXED VERSION
-// ================================
-// ================================
-// UPDATE Employee by Department Head - DEBUG VERSION
-// ================================
-// ================================
-// UPDATE Employee by Department Head - NO NOTIFICATIONS VERSION
 // ================================
 export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -549,7 +549,7 @@ export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
 });
 
 // ================================
-// DELETE Employee by Department Head - NO NOTIFICATIONS VERSION
+// DELETE Employee by Department Head
 // ================================
 export const deleteEmployeeByDeptHead = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -590,73 +590,7 @@ export const deleteEmployeeByDeptHead = asyncHandler(async (req, res) => {
     data: { id: employee._id, status: "Terminated" }
   });
 });
-// ================================
-// DELETE Employee by Department Head
-// ================================
 
-export const updateDeptHeadPhoto = asyncHandler(async (req, res) => {
-  try {
-    const deptHead = await Employee.findById(req.user._id);
-    
-    if (!deptHead) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Department Head not found" 
-      });
-    }
-
-    // Check if file was uploaded
-    if (!req.file) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Please upload a photo" 
-      });
-    }
-
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-    if (!allowedTypes.includes(req.file.mimetype)) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid file type. Only JPG, PNG, and GIF are allowed" 
-      });
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024; // 5MB
-    if (req.file.size > maxSize) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "File size too large. Maximum size is 5MB" 
-      });
-    }
-
-    // Save the file path (adjust based on your storage setup)
-    // Option 1: If using cloud storage (Cloudinary, S3, etc.)
-    // const result = await uploadToCloud(req.file);
-    // deptHead.photo = result.secure_url;
-
-    // Option 2: If storing locally
-    const photoPath = `/uploads/employees/${req.file.filename}`;
-    deptHead.photo = photoPath;
-
-    await deptHead.save();
-
-    res.status(200).json({
-      success: true,
-      message: "Photo uploaded successfully",
-      photoUrl: deptHead.photo
-    });
-
-  } catch (error) {
-    console.error("Photo upload error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Failed to upload photo",
-      error: error.message 
-    });
-  }
-});
 // ================================
 // GET Notifications for Specific Department Head
 // ================================
@@ -756,4 +690,129 @@ export const deleteDeptHeadNotification = asyncHandler(async (req, res) => {
   res.status(200).json({
     message: "Notification deleted successfully"
   });
+});
+
+// ================================
+// UPDATE Department Head Photo
+// ================================
+// ================================
+// UPDATE Department Head Photo
+// ================================
+export const updateDeptHeadPhoto = asyncHandler(async (req, res) => {
+  try {
+    const deptHead = await Employee.findById(req.user._id);
+    
+    if (!deptHead) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Department Head not found" 
+      });
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Please upload a photo" 
+      });
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid file type. Only JPG, PNG, and GIF are allowed" 
+      });
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (req.file.size > maxSize) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "File size too large. Maximum size is 5MB" 
+      });
+    }
+
+    // Save the file path - CHANGED TO YOUR DESIRED PATH
+    const photoPath = `/uploads/photos/${req.file.filename}`;
+    deptHead.photo = photoPath;
+
+    await deptHead.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Photo uploaded successfully",
+      photo: deptHead.photo, // Return photo path
+      photoUrl: `${req.protocol}://${req.get('host')}${deptHead.photo}` // Return full URL for compatibility
+    });
+
+  } catch (error) {
+    console.error("Photo upload error:", error);
+    
+    // Handle multer errors
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        success: false, 
+        message: "File size too large. Maximum size is 5MB" 
+      });
+    }
+    
+    if (error.message && error.message.includes('Only image files')) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid file type. Only JPG, PNG, and GIF are allowed" 
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to upload photo",
+      error: error.message 
+    });
+  }
+});
+
+// ================================
+// DELETE Department Head Photo
+// ================================
+export const deleteDeptHeadPhoto = asyncHandler(async (req, res) => {
+  try {
+    const deptHead = await Employee.findById(req.user._id);
+    
+    if (!deptHead) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Department Head not found" 
+      });
+    }
+
+    // Delete the actual file from storage - CHANGED PATH
+    if (deptHead.photo && deptHead.photo.startsWith('/uploads/photos/')) {
+      try {
+        const filePath = path.join(__dirname, '..', '..', 'uploads', 'photos', path.basename(deptHead.photo));
+        await fs.unlink(filePath);
+      } catch (fileErr) {
+        console.log("File not found or already deleted, continuing...");
+      }
+    }
+
+    // Clear the photo field
+    deptHead.photo = null;
+    await deptHead.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Photo removed successfully"
+    });
+
+  } catch (error) {
+    console.error("Photo removal error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to remove photo",
+      error: error.message 
+    });
+  }
 });

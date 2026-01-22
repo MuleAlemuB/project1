@@ -134,7 +134,14 @@ const DeptHeadDashboard = () => {
       // 2. Get statistics
       const statsRes = await axiosInstance.get("/depthead/stats");
       console.log("Stats response:", statsRes.data);
-      setStats(statsRes.data);
+      
+      // Count only unread notifications
+      const unreadCount = await countUnreadNotifications();
+      
+      setStats({
+        ...statsRes.data,
+        notifications: unreadCount // Use unread count instead of total
+      });
       
       setLastUpdated(new Date());
     } catch (err) {
@@ -155,6 +162,23 @@ const DeptHeadDashboard = () => {
     }
   };
 
+  // Function to count unread notifications
+  const countUnreadNotifications = async () => {
+    try {
+      const response = await axiosInstance.get("/depthead/notifications");
+      const notifications = response.data;
+      
+      // Count notifications where seen is false
+      const unreadCount = notifications.filter(notification => !notification.seen).length;
+      console.log(`Found ${unreadCount} unread notifications out of ${notifications.length} total`);
+      
+      return unreadCount;
+    } catch (err) {
+      console.error("Error counting unread notifications:", err);
+      return 0;
+    }
+  };
+
   const fetchNotifications = async () => {
     if (!authUser) return;
     
@@ -162,6 +186,13 @@ const DeptHeadDashboard = () => {
     try {
       const res = await axiosInstance.get("/depthead/notifications");
       setNotificationsList(res.data);
+      
+      // Update stats with unread count
+      const unreadCount = res.data.filter(notification => !notification.seen).length;
+      setStats(prev => ({
+        ...prev,
+        notifications: unreadCount
+      }));
     } catch (err) {
       console.error("Error fetching notifications:", err);
     } finally {
@@ -171,21 +202,53 @@ const DeptHeadDashboard = () => {
 
   const markAllAsRead = async () => {
     try {
-      await axiosInstance.put("/notifications/mark-all-read");
-      // Refresh notifications and stats
-      await fetchNotifications();
-      await fetchDashboardData();
+      // Mark all notifications as read individually or use a bulk endpoint
+      await Promise.all(
+        notificationsList
+          .filter(notification => !notification.seen)
+          .map(notification => 
+            axiosInstance.put(`/depthead/notifications/${notification._id}/read`)
+          )
+      );
+      
+      // Update local state
+      const updatedNotifications = notificationsList.map(notification => ({
+        ...notification,
+        seen: true
+      }));
+      setNotificationsList(updatedNotifications);
+      
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        notifications: 0
+      }));
+      
+      showNotificationMessage("All notifications marked as read", "success");
     } catch (err) {
       console.error("Error marking all as read:", err);
+      showNotificationMessage("Failed to mark notifications as read", "error");
     }
   };
 
   const markAsRead = async (notificationId) => {
     try {
-      await axiosInstance.put(`/notifications/${notificationId}/seen`);
-      // Refresh notifications and stats
-      await fetchNotifications();
-      await fetchDashboardData();
+      await axiosInstance.put(`/depthead/notifications/${notificationId}/read`);
+      
+      // Update local state
+      const updatedNotifications = notificationsList.map(notification => 
+        notification._id === notificationId 
+          ? { ...notification, seen: true }
+          : notification
+      );
+      setNotificationsList(updatedNotifications);
+      
+      // Update stats
+      const unreadCount = updatedNotifications.filter(notification => !notification.seen).length;
+      setStats(prev => ({
+        ...prev,
+        notifications: unreadCount
+      }));
     } catch (err) {
       console.error("Error marking as read:", err);
     }
@@ -196,6 +259,12 @@ const DeptHeadDashboard = () => {
       await fetchNotifications();
     }
     setShowNotificationDropdown(!showNotificationDropdown);
+  };
+
+  // Helper function to show notification messages
+  const showNotificationMessage = (message, type = "success") => {
+    // You could implement a toast notification system here
+    console.log(`${type}: ${message}`);
   };
 
   useEffect(() => {
@@ -232,6 +301,9 @@ const DeptHeadDashboard = () => {
     if (diffHours < 24) return `${diffHours} ${language === "en" ? "hr" : "ሰአት"}`;
     return `${diffDays} ${language === "en" ? "day" : "ቀን"}`;
   };
+
+  // Get unread notifications count
+  const unreadNotificationsCount = notificationsList.filter(notification => !notification.seen).length;
 
   if (loading && !deptHead) {
     return (
@@ -328,8 +400,13 @@ const DeptHeadDashboard = () => {
                     >
                       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
                         <div className="flex justify-between items-center">
-                          <h3 className="font-bold text-lg">{t.notifications}</h3>
-                          {stats.notifications > 0 && (
+                          <h3 className="font-bold text-lg">
+                            {t.notifications} 
+                            <span className="ml-2 text-sm font-normal">
+                              ({unreadNotificationsCount} {t.unread.toLowerCase()})
+                            </span>
+                          </h3>
+                          {unreadNotificationsCount > 0 && (
                             <button
                               onClick={markAllAsRead}
                               className="text-sm text-blue-500 hover:text-blue-600 dark:text-blue-400"
@@ -349,45 +426,112 @@ const DeptHeadDashboard = () => {
                             </p>
                           </div>
                         ) : notificationsList.length > 0 ? (
-                          notificationsList.map((notification) => (
-                            <div
-                              key={notification._id}
-                              className={`p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${
-                                !notification.seen ? "bg-blue-50 dark:bg-blue-900/20" : ""
-                              }`}
-                              onClick={() => {
-                                markAsRead(notification._id);
-                                navigate("/departmenthead/notifications");
-                              }}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                  <p className={`font-medium ${
-                                    darkMode ? "text-gray-200" : "text-gray-800"
-                                  }`}>
-                                    {notification.message}
-                                  </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {formatTimeAgo(notification.createdAt)}
-                                  </p>
-                                </div>
-                                {!notification.seen && (
-                                  <span className="ml-2 w-2 h-2 bg-blue-500 rounded-full"></span>
-                                )}
+                          <>
+                            {/* Unread notifications first */}
+                            {notificationsList.filter(n => !n.seen).length > 0 && (
+                              <div className="px-4 pt-3 pb-2">
+                                <h4 className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider">
+                                  {language === "en" ? "New" : "አዲስ"}
+                                </h4>
                               </div>
-                              {notification.type && (
-                                <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
-                                  notification.type === "Leave"
-                                    ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
-                                    : notification.type === "Requisition"
-                                    ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
-                                    : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                                }`}>
-                                  {notification.type}
-                                </span>
-                              )}
-                            </div>
-                          ))
+                            )}
+                            
+                            {notificationsList
+                              .filter(notification => !notification.seen)
+                              .map((notification) => (
+                                <div
+                                  key={notification._id}
+                                  className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors bg-blue-50 dark:bg-blue-900/20"
+                                  onClick={() => {
+                                    markAsRead(notification._id);
+                                  }}
+                                >
+                                  <div className="flex justify-between items-start">
+                                    <div className="flex-1">
+                                      <p className={`font-medium ${
+                                        darkMode ? "text-gray-200" : "text-gray-800"
+                                      }`}>
+                                        {notification.message}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        {formatTimeAgo(notification.createdAt)}
+                                      </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                      <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          markAsRead(notification._id);
+                                        }}
+                                        className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                                      >
+                                        {language === "en" ? "Mark as read" : "እንደተነበበ ምልክት አድርግ"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  {notification.type && (
+                                    <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
+                                      notification.type === "Leave"
+                                        ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                                        : notification.type === "Requisition"
+                                        ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
+                                        : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                    }`}>
+                                      {notification.type}
+                                    </span>
+                                  )}
+                                </div>
+                              ))
+                            }
+                            
+                            {/* Read notifications */}
+                            {notificationsList.filter(n => n.seen).length > 0 && (
+                              <>
+                                <div className="px-4 pt-3 pb-2">
+                                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                    {language === "en" ? "Earlier" : "ቀደም ሲል"}
+                                  </h4>
+                                </div>
+                                
+                                {notificationsList
+                                  .filter(notification => notification.seen)
+                                  .slice(0, 3) // Show only 3 read notifications
+                                  .map((notification) => (
+                                    <div
+                                      key={notification._id}
+                                      className="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                                      onClick={() => navigate("/departmenthead/notifications")}
+                                    >
+                                      <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                          <p className={`font-medium ${
+                                            darkMode ? "text-gray-300" : "text-gray-700"
+                                          }`}>
+                                            {notification.message}
+                                          </p>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {formatTimeAgo(notification.createdAt)}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {notification.type && (
+                                        <span className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
+                                          notification.type === "Leave"
+                                            ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300"
+                                            : notification.type === "Requisition"
+                                            ? "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300"
+                                            : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
+                                        }`}>
+                                          {notification.type}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))
+                                }
+                              </>
+                            )}
+                          </>
                         ) : (
                           <div className="p-8 text-center">
                             <FaBell className="text-4xl text-gray-400 dark:text-gray-600 mx-auto mb-3" />
@@ -608,7 +752,7 @@ const DeptHeadDashboard = () => {
             </div>
           </motion.div>
 
-          {/* Notifications Card */}
+          {/* Notifications Card - Updated to show only unread count */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -641,7 +785,7 @@ const DeptHeadDashboard = () => {
             
             <div>
               <p className={`text-base sm:text-lg mb-2 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                {t.notifications}
+                {t.notifications} <span className="text-xs">({t.unread})</span>
               </p>
               <div className="flex items-end justify-between">
                 <p className={`text-3xl sm:text-4xl md:text-5xl font-bold ${stats.notifications > 0 ? 'text-yellow-500' : darkMode ? 'text-white' : 'text-gray-900'}`}>

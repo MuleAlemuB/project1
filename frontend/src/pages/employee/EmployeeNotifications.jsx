@@ -32,38 +32,61 @@ const EmployeeNotifications = () => {
 
   // Fetch notifications
   const fetchNotifications = useCallback(async () => {
-    try {
-      setLoading(true);
-      const { data } = await axiosInstance.get("/notifications/my");
+  try {
+    setLoading(true);
+    const { data } = await axiosInstance.get("/notifications/my");
+    
+    console.log("Received notifications:", data); // Debug log
+    
+    // ✅ FIX: Filter notifications specifically for this employee
+    const filteredData = data.filter(notification => {
+      // 1. Check if notification has applicant.email matching user email
+      const hasApplicantEmail = notification.applicant?.email && 
+        notification.applicant.email.toLowerCase() === user.email.toLowerCase();
       
-      // ✅ FIX: Filter out notifications that should only go to admins
-      const filteredData = data.filter(notification => {
-        // If it's a work experience REQUEST notification (not status update)
-        if (notification.type === "Work Experience Request" && 
-            notification.message?.includes("has requested") &&
-            !notification.message?.includes("has been") &&
-            !notification.message?.includes("submitted successfully")) {
-          return false; // Hide from employee
-        }
-        return true; // Show all other notifications
-      });
+      // 2. Check if notification has employee.email matching user email
+      const hasEmployeeEmail = notification.employee?.email && 
+        notification.employee.email.toLowerCase() === user.email.toLowerCase();
       
-      // Sort by date, newest first
-      const sorted = filteredData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setNotifications(sorted);
+      // 3. Check if notification is specifically for this employee by ID (if available)
+      const hasEmployeeId = notification.employee?._id && 
+        notification.employee._id === user._id;
       
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-      toast.error(
-        language === "am" 
-          ? "ማስታወቂያዎችን ማግኘት አልተሳካም" 
-          : "Failed to fetch notifications"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [language]);
-
+      // 4. For work experience notifications, check if they're status updates (not requests)
+      if (notification.type === "Work Experience Request" && 
+          notification.message?.includes("has requested") &&
+          !notification.message?.includes("has been") &&
+          !notification.message?.includes("submitted successfully")) {
+        return false; // Hide work experience REQUEST notifications from employee
+      }
+      
+      // 5. For leave notifications, check metadata for employee email
+      let hasMetadataEmail = false;
+      if (notification.metadata && notification.metadata.email) {
+        hasMetadataEmail = notification.metadata.email.toLowerCase() === user.email.toLowerCase();
+      }
+      
+      // 6. Return true if any of the conditions match
+      return hasApplicantEmail || hasEmployeeEmail || hasEmployeeId || hasMetadataEmail;
+    });
+    
+    console.log("Filtered notifications for employee:", filteredData); // Debug log
+    
+    // Sort by date, newest first
+    const sorted = filteredData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setNotifications(sorted);
+    
+  } catch (error) {
+    console.error("Error fetching notifications:", error);
+    toast.error(
+      language === "am" 
+        ? "ማስታወቂያዎችን ማግኘት አልተሳካም" 
+        : "Failed to fetch notifications"
+    );
+  } finally {
+    setLoading(false);
+  }
+}, [language, user.email, user._id]);
   useEffect(() => {
     if (user) {
       fetchNotifications();

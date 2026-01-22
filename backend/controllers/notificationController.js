@@ -1,4 +1,3 @@
-// backend/controllers/notificationController.js
 import asyncHandler from "express-async-handler";
 import Notification from "../models/Notification.js";
 import LeaveRequest from "../models/LeaveRequest.js";
@@ -63,6 +62,8 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
   const userId = user._id;
   const userEmail = user.email?.toLowerCase();
 
+  console.log(`[NOTIFICATION] Fetching notifications for: ${user.email}, Role: ${role}, ID: ${userId}`);
+
   let notifications;
 
   if (role === "admin") {
@@ -101,7 +102,7 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
 
             case "Leave":
-              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
+              const leave = await LeaveRequest.findById(notif.reference || notif.relatedId).lean();
               
               if (leave) {
                 let employeeName = leave.requesterName;
@@ -199,6 +200,11 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
 
             case "Work Experience":
+            case "Work Experience Request":
+            case "Work Experience Approved":
+            case "Work Experience Rejected":
+            case "Work Experience Letter Generated":
+            case "Work Experience Letter Uploaded":
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
@@ -217,95 +223,74 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
     res.json(enhancedNotifications);
   } else if (role === "departmenthead") {
+    // For department head - get all notifications for department heads
+    notifications = await Notification.find({ recipientRole: "DepartmentHead" })
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    console.log(`[NOTIFICATION] Found ${notifications.length} notifications for all department heads`);
+    
     // Get current department head's department
     const userDepartment = await getCurrentDeptHeadDepartment(userId);
+    console.log(`[NOTIFICATION] Current department head department: ${userDepartment}`);
     
-    // FIXED: Filter notifications by department AND recipientId
-    notifications = await Notification.find({
-      $or: [
-        // Notifications for this specific department head (by ID)
-        { recipientId: userId },
-        // Notifications for department heads in user's department
-        { 
-          recipientRole: "DepartmentHead",
-          department: userDepartment 
-        },
-        // Legacy notifications for department heads without department info
-        {
-          recipientRole: "DepartmentHead",
-          department: { $exists: false }
-        }
-      ]
-    })
-    .sort({ createdAt: -1 })
-    .lean();
-    
-    // FIXED: Filter out notifications that were meant for previous department heads
-    // Only include notifications that were created after the current department head was assigned
-    // OR notifications that are specifically for this user by ID
-    const filteredNotifications = notifications.filter(notif => {
-      // If notification has recipientId, check if it's for this user
-      if (notif.recipientId) {
-        return notif.recipientId.toString() === userId.toString();
-      }
-      
-      // If notification doesn't have recipientId but has department, check if it's for user's department
-      if (notif.department) {
-        return notif.department.toString() === userDepartment?.toString();
-      }
-      
-      // Legacy notifications without department or recipientId
-      return true;
-    });
-    
-    const enhancedNotifications = await Promise.all(
-      filteredNotifications.map(async (notif) => {
+    // Filter notifications based on department from referenced documents
+    const filteredNotifications = await Promise.all(
+      notifications.map(async (notif) => {
         let enhancedNotif = { ...notif };
+        let shouldInclude = false;
         
         try {
           switch (notif.type) {
             case "Leave":
-              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
+              const leave = await LeaveRequest.findById(notif.reference || notif.relatedId).lean();
               
               if (leave) {
-                let employeeName = leave.requesterName;
-                let employeeEmail = leave.requesterEmail;
-                let employeePhone = null;
-                let employeeEmpId = null;
-                
-                if (leave.requester && mongoose.Types.ObjectId.isValid(leave.requester)) {
-                  try {
-                    const employee = await Employee.findById(leave.requester)
-                      .select('name email phoneNumber empId')
-                      .lean();
-                    if (employee) {
-                      employeeName = employee.name;
-                      employeeEmail = employee.email;
-                      employeePhone = employee.phoneNumber;
-                      employeeEmpId = employee.empId;
+                // Check if leave request is from this department head's department
+                if (leave.department && leave.department.toString() === userDepartment?.toString()) {
+                  shouldInclude = true;
+                  
+                  let employeeName = leave.requesterName;
+                  let employeeEmail = leave.requesterEmail;
+                  let employeePhone = null;
+                  let employeeEmpId = null;
+                  
+                  if (leave.requester && mongoose.Types.ObjectId.isValid(leave.requester)) {
+                    try {
+                      const employee = await Employee.findById(leave.requester)
+                        .select('name email phoneNumber empId')
+                        .lean();
+                      if (employee) {
+                        employeeName = employee.name;
+                        employeeEmail = employee.email;
+                        employeePhone = employee.phoneNumber;
+                        employeeEmpId = employee.empId;
+                      }
+                    } catch (error) {
+                      console.log('Could not populate employee for leave request');
                     }
-                  } catch (error) {
-                    console.log('Could not populate employee for leave request');
                   }
+                  
+                  const departmentName = await getDepartmentName(leave.department);
+                  
+                  enhancedNotif.metadata = {
+                    employeeName: employeeName,
+                    department: departmentName,
+                    email: employeeEmail,
+                    phone: employeePhone,
+                    empId: employeeEmpId,
+                    startDate: leave.startDate,
+                    endDate: leave.endDate,
+                    reason: leave.reason,
+                    attachments: leave.attachments || [],
+                    requesterRole: leave.requesterRole,
+                    targetRole: leave.targetRole,
+                    leaveType: leave.leaveType
+                  };
                 }
-                
-                const departmentName = await getDepartmentName(leave.department);
-                
-                enhancedNotif.metadata = {
-                  employeeName: employeeName,
-                  department: departmentName,
-                  email: employeeEmail,
-                  phone: employeePhone,
-                  empId: employeeEmpId,
-                  startDate: leave.startDate,
-                  endDate: leave.endDate,
-                  reason: leave.reason,
-                  attachments: leave.attachments || [],
-                  requesterRole: leave.requesterRole,
-                  targetRole: leave.targetRole,
-                  leaveType: leave.leaveType
-                };
               } else if (notif.metadata) {
+                // If no leave request found but has metadata, include it
+                shouldInclude = true;
                 enhancedNotif.metadata = notif.metadata;
               }
               break;
@@ -314,90 +299,117 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               const requisition = await Requisition.findById(notif.reference).lean();
               
               if (requisition) {
-                let requesterName = requisition.requestedBy;
-                let requesterEmail = requisition.requestedByEmail;
+                // Check if requisition is from this department head's department
                 let requesterDepartment = requisition.department;
-                let requesterEmpId = null;
                 
                 if (requisition.requestedById && mongoose.Types.ObjectId.isValid(requisition.requestedById)) {
                   try {
                     const employee = await Employee.findById(requisition.requestedById)
-                      .select('name email department empId')
+                      .select('department')
                       .lean();
                     if (employee) {
-                      requesterName = employee.name || requesterName;
-                      requesterEmail = employee.email || requesterEmail;
                       requesterDepartment = employee.department || requesterDepartment;
-                      requesterEmpId = employee.empId;
                     }
                   } catch (error) {
                     console.log('Could not populate employee for requisition');
                   }
                 }
                 
-                const departmentName = await getDepartmentName(requesterDepartment);
-                
-                const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
-                const justification = requisition.justification || requisition.reason || "N/A";
-                const priority = requisition.priority || "medium";
-                
-                enhancedNotif.metadata = {
-                  requesterName: requesterName,
-                  department: departmentName,
-                  email: requesterEmail || "N/A",
-                  empId: requesterEmpId,
-                  position: requisition.position,
-                  educationLevel: requisition.educationalLevel || requisition.educationLevel,
-                  quantity: requisition.quantity,
-                  termOfEmployment: requisition.termOfEmployment,
-                  sex: requisition.sex,
-                  experience: requisition.experience,
-                  requestDate: requisition.date || requisition.createdAt,
-                  justification: justification,
-                  priority: priority,
-                  attachments: hasAttachments ? requisition.attachments : []
-                };
+                if (requesterDepartment && requesterDepartment.toString() === userDepartment?.toString()) {
+                  shouldInclude = true;
+                  
+                  let requesterName = requisition.requestedBy;
+                  let requesterEmail = requisition.requestedByEmail;
+                  let requesterEmpId = null;
+                  
+                  if (requisition.requestedById && mongoose.Types.ObjectId.isValid(requisition.requestedById)) {
+                    try {
+                      const employee = await Employee.findById(requisition.requestedById)
+                        .select('name email empId')
+                        .lean();
+                      if (employee) {
+                        requesterName = employee.name || requesterName;
+                        requesterEmail = employee.email || requesterEmail;
+                        requesterEmpId = employee.empId;
+                      }
+                    } catch (error) {
+                      console.log('Could not populate employee for requisition');
+                    }
+                  }
+                  
+                  const departmentName = await getDepartmentName(requesterDepartment);
+                  
+                  const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
+                  const justification = requisition.justification || requisition.reason || "N/A";
+                  const priority = requisition.priority || "medium";
+                  
+                  enhancedNotif.metadata = {
+                    requesterName: requesterName,
+                    department: departmentName,
+                    email: requesterEmail || "N/A",
+                    empId: requesterEmpId,
+                    position: requisition.position,
+                    educationLevel: requisition.educationalLevel || requisition.educationLevel,
+                    quantity: requisition.quantity,
+                    termOfEmployment: requisition.termOfEmployment,
+                    sex: requisition.sex,
+                    experience: requisition.experience,
+                    requestDate: requisition.date || requisition.createdAt,
+                    justification: justification,
+                    priority: priority,
+                    attachments: hasAttachments ? requisition.attachments : []
+                  };
+                }
               } else if (notif.metadata) {
+                // If no requisition found but has metadata, include it
+                shouldInclude = true;
                 enhancedNotif.metadata = notif.metadata;
               }
               break;
 
             default:
+              // For other notification types, include them by default
+              shouldInclude = true;
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
               break;
           }
         } catch (error) {
-          console.error(`Error enhancing notification ${notif._id}:`, error.message);
+          console.error(`Error processing notification ${notif._id}:`, error.message);
+          // On error, include the notification with existing metadata
+          shouldInclude = true;
           if (notif.metadata) {
             enhancedNotif.metadata = notif.metadata;
           }
         }
         
-        return enhancedNotif;
+        return shouldInclude ? enhancedNotif : null;
       })
     );
-
-    res.json(enhancedNotifications);
+    
+    // Remove null entries (notifications that shouldn't be included)
+    const finalNotifications = filteredNotifications.filter(notif => notif !== null);
+    
+    console.log(`[NOTIFICATION] Filtered to ${finalNotifications.length} notifications for this department head`);
+    
+    res.json(finalNotifications);
   } else if (role === "employee") {
+    // For employee - get notifications based on applicant or employee fields
     notifications = await Notification.find({
       $or: [
-        { recipientId: userId },
-        { "employee._id": userId },
+        // Check applicant email field
+        { "applicant.email": userEmail },
+        // Check employee email field  
         { "employee.email": userEmail },
-        { 
-          recipientRole: "Employee",
-          $and: [
-            { recipientId: { $exists: false } },
-            { "employee._id": { $exists: false } },
-            { "employee.email": { $exists: false } }
-          ]
-        }
+        // Check for employee recipient role without specific user
+        { recipientRole: "Employee" }
       ]
     })
       .sort({ createdAt: -1 })
       .lean();
+    
+    console.log(`[NOTIFICATION] Found ${notifications.length} employee notifications`);
     
     const enhancedNotifications = await Promise.all(
       notifications.map(async (notif) => {
@@ -406,7 +418,7 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
         try {
           switch (notif.type) {
             case "Leave":
-              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
+              const leave = await LeaveRequest.findById(notif.reference || notif.relatedId).lean();
               
               if (leave) {
                 const departmentName = leave.department;
@@ -431,11 +443,16 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
               
             case "Work Experience":
+            case "Work Experience Request":
+            case "Work Experience Approved":
+            case "Work Experience Rejected":
+            case "Work Experience Letter Generated":
+            case "Work Experience Letter Uploaded":
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               } else {
                 enhancedNotif.metadata = {
-                  type: "Work Experience",
+                  type: notif.type,
                   status: notif.status || "pending"
                 };
               }
@@ -464,20 +481,23 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
       })
     );
 
+    // Filter notifications to ensure they're for this specific employee
     const filteredNotifications = enhancedNotifications.filter(notif => {
-      if (notif.employee?._id || notif.employee?.email) {
-        return (
-          notif.employee?._id?.toString() === userId.toString() ||
-          notif.employee?.email?.toLowerCase() === userEmail
-        );
+      // Check if notification has applicant email matching user email
+      if (notif.applicant?.email) {
+        return notif.applicant.email.toLowerCase() === userEmail;
       }
       
-      if (notif.recipientId) {
-        return notif.recipientId.toString() === userId.toString();
+      // Check if notification has employee email matching user email
+      if (notif.employee?.email) {
+        return notif.employee.email.toLowerCase() === userEmail;
       }
       
+      // If no specific email, assume it's for this employee
       return notif.recipientRole === "Employee";
     });
+    
+    console.log(`[NOTIFICATION] Final filtered to ${filteredNotifications.length} notifications for this employee`);
     
     res.json(filteredNotifications);
   } else {
@@ -504,29 +524,56 @@ export const markAsSeen = asyncHandler(async (req, res) => {
   if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
     isAuthorized = true;
   } else if (role === "departmenthead") {
-    // FIXED: For department head, check if notification is for their department
+    // Check if notification is for department head
     if (notif.recipientRole?.toLowerCase() === "departmenthead") {
+      // Get user's department
       const userDepartment = await getCurrentDeptHeadDepartment(userId);
       
-      if (notif.recipientId && notif.recipientId.toString() === userId.toString()) {
-        isAuthorized = true;
-      } else if (notif.department && notif.department.toString() === userDepartment?.toString()) {
-        isAuthorized = true;
-      } else if (!notif.department && !notif.recipientId) {
-        // Legacy notification
-        isAuthorized = true;
+      // Check if this notification belongs to user's department
+      let belongsToUserDept = false;
+      
+      // For leave requests, check the referenced leave request
+      if (notif.type === "Leave" || notif.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notif.reference || notif.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
+        }
       }
+      // For requisitions, check the referenced requisition
+      else if (notif.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notif.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      }
+      // For other types, allow access
+      else {
+        belongsToUserDept = true;
+      }
+      
+      isAuthorized = belongsToUserDept;
     }
   } else if (role === "employee") {
     if (notif.recipientRole?.toLowerCase() === "employee") {
-      if (!notif.recipientId && !notif.employee?._id && !notif.employee?.email) {
+      // Check if notification has applicant or employee email matching user email
+      if (notif.applicant?.email && notif.applicant.email.toLowerCase() === email) {
         isAuthorized = true;
-      }
-      else if (
-        (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
-        (notif.employee?._id && notif.employee._id.toString() === userId.toString()) ||
-        (notif.employee?.email && notif.employee.email.toLowerCase() === email)
-      ) {
+      } else if (notif.employee?.email && notif.employee.email.toLowerCase() === email) {
+        isAuthorized = true;
+      } else if (!notif.applicant?.email && !notif.employee?.email) {
+        // If no specific email, assume it's for this employee
         isAuthorized = true;
       }
     }
@@ -563,45 +610,85 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
   if (role === "admin") {
     query = { recipientRole: "Admin", seen: false };
   } else if (role === "departmenthead") {
-    // FIXED: For department head, only mark notifications for their department
+    // For department head, we need to handle this differently
+    // We'll mark all unseen department head notifications as seen
     const userDepartment = await getCurrentDeptHeadDepartment(userId);
     
-    query = {
-      $or: [
-        { recipientId: userId, seen: false },
-        { 
-          recipientRole: "DepartmentHead",
-          department: userDepartment,
-          seen: false
-        },
-        {
-          recipientRole: "DepartmentHead",
-          department: { $exists: false },
-          seen: false
+    // First get all department head notifications
+    const allDeptHeadNotifications = await Notification.find({ 
+      recipientRole: "DepartmentHead", 
+      seen: false 
+    }).lean();
+    
+    // Filter to only those belonging to user's department
+    const notificationsToMark = [];
+    
+    for (const notif of allDeptHeadNotifications) {
+      let belongsToUserDept = false;
+      
+      // Check if this notification belongs to user's department
+      if (notif.type === "Leave" || notif.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notif.reference || notif.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
         }
-      ]
-    };
+      } else if (notif.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notif.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      } else {
+        // For other types, mark them
+        belongsToUserDept = true;
+      }
+      
+      if (belongsToUserDept) {
+        notificationsToMark.push(notif._id);
+      }
+    }
+    
+    // Mark all filtered notifications as seen
+    await Notification.updateMany(
+      { _id: { $in: notificationsToMark } },
+      { $set: { seen: true, seenAt: new Date() } }
+    );
+    
+    return res.json({ 
+      message: "All notifications marked as read",
+      count: notificationsToMark.length
+    });
+    
   } else if (role === "employee") {
     query = {
       $or: [
-        { recipientId: userId, seen: false },
-        { "employee._id": userId, seen: false },
+        { "applicant.email": email, seen: false },
         { "employee.email": email, seen: false },
         { 
           recipientRole: "Employee", 
           seen: false,
           $and: [
-            { recipientId: { $exists: false } },
-            { "employee._id": { $exists: false } },
+            { "applicant.email": { $exists: false } },
             { "employee.email": { $exists: false } }
           ]
         }
       ]
     };
+    
+    await Notification.updateMany(query, { $set: { seen: true, seenAt: new Date() } });
   }
 
-  await Notification.updateMany(query, { $set: { seen: true } });
-  
   res.json({ message: "All notifications marked as read" });
 });
 
@@ -616,38 +703,78 @@ export const clearReadNotifications = asyncHandler(async (req, res) => {
   if (role === "admin") {
     query.recipientRole = "Admin";
   } else if (role === "departmenthead") {
-    // FIXED: For department head, only clear notifications for their department
+    // For department head, we need to handle this differently
     const userDepartment = await getCurrentDeptHeadDepartment(userId);
     
-    query.$or = [
-      { recipientId: userId },
-      { 
-        recipientRole: "DepartmentHead",
-        department: userDepartment
-      },
-      {
-        recipientRole: "DepartmentHead",
-        department: { $exists: false }
+    // First get all read department head notifications
+    const allReadDeptHeadNotifications = await Notification.find({ 
+      recipientRole: "DepartmentHead", 
+      seen: true 
+    }).lean();
+    
+    // Filter to only those belonging to user's department
+    const notificationsToDelete = [];
+    
+    for (const notif of allReadDeptHeadNotifications) {
+      let belongsToUserDept = false;
+      
+      // Check if this notification belongs to user's department
+      if (notif.type === "Leave" || notif.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notif.reference || notif.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
+        }
+      } else if (notif.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notif.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      } else {
+        // For other types, delete them
+        belongsToUserDept = true;
       }
-    ];
+      
+      if (belongsToUserDept) {
+        notificationsToDelete.push(notif._id);
+      }
+    }
+    
+    // Delete all filtered notifications
+    await Notification.deleteMany({ _id: { $in: notificationsToDelete } });
+    
+    return res.json({ 
+      message: "All read notifications cleared",
+      count: notificationsToDelete.length
+    });
+    
   } else if (role === "employee") {
     query.$or = [
-      { recipientId: userId },
-      { "employee._id": userId },
+      { "applicant.email": email },
       { "employee.email": email },
       { 
         recipientRole: "Employee",
         $and: [
-          { recipientId: { $exists: false } },
-          { "employee._id": { $exists: false } },
+          { "applicant.email": { $exists: false } },
           { "employee.email": { $exists: false } }
         ]
       }
     ];
+    
+    await Notification.deleteMany(query);
   }
 
-  await Notification.deleteMany(query);
-  
   res.json({ message: "All read notifications cleared" });
 });
 
@@ -668,27 +795,48 @@ export const deleteNotification = asyncHandler(async (req, res) => {
   if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
     canDelete = true;
   } else if (role === "departmenthead") {
-    // FIXED: For department head, only delete notifications for their department
     if (notif.recipientRole?.toLowerCase() === "departmenthead") {
+      // Get user's department
       const userDepartment = await getCurrentDeptHeadDepartment(userId);
       
-      if (notif.recipientId && notif.recipientId.toString() === userId.toString()) {
-        canDelete = true;
-      } else if (notif.department && notif.department.toString() === userDepartment?.toString()) {
-        canDelete = true;
-      } else if (!notif.department && !notif.recipientId) {
-        // Legacy notification
-        canDelete = true;
+      // Check if this notification belongs to user's department
+      let belongsToUserDept = false;
+      
+      if (notif.type === "Leave" || notif.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notif.reference || notif.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
+        }
+      } else if (notif.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notif.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      } else {
+        belongsToUserDept = true;
       }
+      
+      canDelete = belongsToUserDept;
     }
   } else if (role === "employee") {
     if (notif.recipientRole?.toLowerCase() === "employee") {
-      if (
-        (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
-        (notif.employee?._id && notif.employee._id.toString() === userId.toString()) ||
-        (notif.employee?.email && notif.employee.email.toLowerCase() === email) ||
-        (!notif.recipientId && !notif.employee?._id && !notif.employee?.email)
-      ) {
+      if (notif.applicant?.email && notif.applicant.email.toLowerCase() === email) {
+        canDelete = true;
+      } else if (notif.employee?.email && notif.employee.email.toLowerCase() === email) {
+        canDelete = true;
+      } else if (!notif.applicant?.email && !notif.employee?.email) {
         canDelete = true;
       }
     }
@@ -705,27 +853,36 @@ export const deleteNotification = asyncHandler(async (req, res) => {
 
 // ---------------- Create a new notification ----------------
 export const createNotification = asyncHandler(async (req, res) => {
-  const { message, recipientRole, type, reference, employee, department, vacancy, status, leaveRequestId, metadata, recipientId } = req.body;
+  const { message, recipientRole, type, reference, employee, department, vacancy, status, leaveRequestId, metadata, applicant } = req.body;
 
   if (!message || !recipientRole) {
     res.status(400);
     throw new Error("Message and recipientRole are required");
   }
 
-  const notification = await Notification.create({
+  // Build notification object based on available fields in your model
+  const notificationData = {
     message,
     recipientRole,
-    recipientId, // NEW: Store specific user ID if available
     type,
     reference,
-    employee,
-    department, // NEW: Store department for department head notifications
-    vacancy,
-    leaveRequestId,
     metadata: metadata || {},
     status: status || "pending",
     seen: false,
-  });
+  };
+
+  // Add optional fields if provided
+  if (applicant) notificationData.applicant = applicant;
+  if (employee) notificationData.employee = employee;
+  if (vacancy) notificationData.vacancy = vacancy;
+  
+  // Use relatedId instead of leaveRequestId to match your model
+  if (leaveRequestId) {
+    notificationData.relatedId = leaveRequestId;
+    notificationData.relatedModel = "LeaveRequest";
+  }
+
+  const notification = await Notification.create(notificationData);
 
   res.status(201).json(notification);
 });
@@ -751,14 +908,20 @@ export const createDeptHeadNotification = asyncHandler(async (req, res) => {
     throw new Error('No active department head found for this department');
   }
 
+  // Create metadata with department info
+  const notificationMetadata = {
+    ...metadata,
+    departmentId: departmentId,
+    departmentHeadName: currentDeptHead.name,
+    departmentHeadEmail: currentDeptHead.email
+  };
+
   const notification = await Notification.create({
     message,
     recipientRole: "DepartmentHead",
-    recipientId: currentDeptHead._id, // Store specific department head ID
     type,
     reference,
-    department: departmentId, // Store department ID
-    metadata: metadata || {},
+    metadata: notificationMetadata,
     status: "pending",
     seen: false,
   });
@@ -780,11 +943,12 @@ export const updateLeaveStatus = asyncHandler(async (req, res) => {
   }
   await leave.save();
 
+  // Update related notification
   await Notification.findOneAndUpdate(
-    { $or: [{ reference: leave._id }, { leaveRequestId: leave._id }] },
+    { $or: [{ reference: leave._id }, { relatedId: leave._id }] },
     { 
       status: leave.status,
-      adminComment: req.body.adminComment || undefined
+      $set: { 'metadata.adminComment': req.body.adminComment || undefined }
     }
   );
 
@@ -817,7 +981,7 @@ export const updateRequisitionStatus = asyncHandler(async (req, res) => {
     { reference: requisition._id },
     { 
       status: requisition.status,
-      adminComment: req.body.adminComment || undefined
+      $set: { 'metadata.adminComment': req.body.adminComment || undefined }
     }
   );
 
@@ -850,7 +1014,7 @@ export const updateApplicationStatus = asyncHandler(async (req, res) => {
     { reference: application._id },
     { 
       status: application.status,
-      adminComment: req.body.adminComment || undefined
+      $set: { 'metadata.adminComment': req.body.adminComment || undefined }
     }
   );
 
@@ -884,24 +1048,47 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
     isAuthorized = true;
   } else if (role === "departmenthead") {
     if (notification.recipientRole?.toLowerCase() === "departmenthead") {
+      // Get user's department
       const userDepartment = await getCurrentDeptHeadDepartment(userId);
       
-      if (notification.recipientId && notification.recipientId.toString() === userId.toString()) {
-        isAuthorized = true;
-      } else if (notification.department && notification.department.toString() === userDepartment?.toString()) {
-        isAuthorized = true;
-      } else if (!notification.department && !notification.recipientId) {
-        isAuthorized = true;
+      // Check if this notification belongs to user's department
+      let belongsToUserDept = false;
+      
+      if (notification.type === "Leave" || notification.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notification.reference || notification.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
+        }
+      } else if (notification.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notification.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      } else {
+        belongsToUserDept = true;
       }
+      
+      isAuthorized = belongsToUserDept;
     }
   } else if (role === "employee") {
     if (notification.recipientRole?.toLowerCase() === "employee") {
-      if (
-        (notification.recipientId && notification.recipientId.toString() === userId.toString()) ||
-        (notification.employee?._id && notification.employee._id.toString() === userId.toString()) ||
-        (notification.employee?.email && notification.employee.email.toLowerCase() === email) ||
-        (!notification.recipientId && !notification.employee?._id && !notification.employee?.email)
-      ) {
+      if (notification.applicant?.email && notification.applicant.email.toLowerCase() === email) {
+        isAuthorized = true;
+      } else if (notification.employee?.email && notification.employee.email.toLowerCase() === email) {
+        isAuthorized = true;
+      } else if (!notification.applicant?.email && !notification.employee?.email) {
         isAuthorized = true;
       }
     }
@@ -930,7 +1117,7 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
         break;
 
       case "Leave":
-        const leave = await LeaveRequest.findById(notification.leaveRequestId || notification.reference).lean();
+        const leave = await LeaveRequest.findById(notification.reference || notification.relatedId).lean();
         
         if (leave) {
           details.leave = leave;
@@ -972,37 +1159,80 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
   const email = req.user.email?.toLowerCase();
   const userId = req.user._id;
 
+  // For department head, we need custom logic
+  if (role === "departmenthead") {
+    const userDepartment = await getCurrentDeptHeadDepartment(userId);
+    
+    // Get all department head notifications
+    const allDeptHeadNotifications = await Notification.find({ 
+      recipientRole: "DepartmentHead" 
+    }).lean();
+    
+    // Filter to only those belonging to user's department
+    let total = 0;
+    let unread = 0;
+    const byType = {};
+    
+    for (const notif of allDeptHeadNotifications) {
+      let belongsToUserDept = false;
+      
+      if (notif.type === "Leave" || notif.type === "Leave Request") {
+        try {
+          const leave = await LeaveRequest.findById(notif.reference || notif.relatedId)
+            .select('department')
+            .lean();
+          if (leave && leave.department && leave.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify leave request department');
+        }
+      } else if (notif.type === "Requisition") {
+        try {
+          const requisition = await Requisition.findById(notif.reference)
+            .select('department')
+            .lean();
+          if (requisition && requisition.department && requisition.department.toString() === userDepartment?.toString()) {
+            belongsToUserDept = true;
+          }
+        } catch (error) {
+          console.log('Could not verify requisition department');
+        }
+      } else {
+        belongsToUserDept = true;
+      }
+      
+      if (belongsToUserDept) {
+        total++;
+        if (!notif.seen) unread++;
+        byType[notif.type] = (byType[notif.type] || 0) + 1;
+      }
+    }
+    
+    const result = {
+      total,
+      unread,
+      read: total - unread,
+      byType
+    };
+    
+    return res.json(result);
+  }
+
+  // For admin and employee, use simpler queries
   let matchStage = {};
 
   if (role === "admin") {
     matchStage = { recipientRole: "Admin" };
-  } else if (role === "departmenthead") {
-    const userDepartment = await getCurrentDeptHeadDepartment(userId);
-    
-    matchStage = {
-      $or: [
-        { recipientId: userId },
-        { 
-          recipientRole: "DepartmentHead",
-          department: userDepartment
-        },
-        {
-          recipientRole: "DepartmentHead",
-          department: { $exists: false }
-        }
-      ]
-    };
   } else if (role === "employee") {
     matchStage = {
       $or: [
-        { recipientId: userId },
-        { "employee._id": userId },
+        { "applicant.email": email },
         { "employee.email": email },
         { 
           recipientRole: "Employee",
           $and: [
-            { recipientId: { $exists: false } },
-            { "employee._id": { $exists: false } },
+            { "applicant.email": { $exists: false } },
             { "employee.email": { $exists: false } }
           ]
         }
@@ -1040,14 +1270,17 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
     total: 0,
     unread: 0,
     read: 0,
-    byType: []
+    byType: {}
   };
 
-  const byTypeObj = {};
-  result.byType.forEach(item => {
-    byTypeObj[item.type] = (byTypeObj[item.type] || 0) + item.count;
-  });
-  result.byType = byTypeObj;
+  // Convert byType array to object
+  if (Array.isArray(result.byType)) {
+    const byTypeObj = {};
+    result.byType.forEach(item => {
+      byTypeObj[item.type] = (byTypeObj[item.type] || 0) + item.count;
+    });
+    result.byType = byTypeObj;
+  }
 
   res.json(result);
 });

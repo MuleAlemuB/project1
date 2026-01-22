@@ -21,8 +21,8 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
 
   // map files to include name + url
   const attachments = req.files?.map((f) => ({
-    name: f.originalname, // original uploaded file name
-    url: f.path,          // server path to file
+    name: f.originalname,
+    url: f.path,
     uploadedAt: new Date(),
   })) || [];
 
@@ -33,7 +33,7 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     targetRole: "Admin",
     requesterName: `${user.firstName} ${user.lastName}`,
     requesterEmail: user.email,
-    requesterEmpId: user.empId, // ADD THIS LINE
+    requesterEmpId: user.empId,
     department: user.department?.name,
     startDate,
     endDate,
@@ -42,25 +42,31 @@ export const createLeaveRequest = asyncHandler(async (req, res) => {
     status: "pending",
   });
 
-  await Notification.create({
-    type: "Leave",
-    recipientRole: "Admin",
+  // In createLeaveRequest function, update the Notification.create():
+await Notification.create({
+  type: "Leave",
+  recipientRole: "Admin",
+  department: user.department?.name,
+  message: `Department Head ${user.firstName} ${user.lastName} requested leave from ${startDate} to ${endDate}`,
+  
+  // ADD THESE FIELDS:
+  relatedId: leave._id,           // This is what the frontend looks for
+  relatedModel: "LeaveRequest",   // Add this too
+  reference: leave._id.toString(), // Add this for compatibility
+  
+  // Keep existing fields:
+  leaveRequestId: leave._id,      // Keep for backward compatibility
+  status: "pending",
+  metadata: {
+    employeeName: `${user.firstName} ${user.lastName}`,
+    empId: user.empId,
     department: user.department?.name,
-    message: `Department Head ${user.firstName} ${user.lastName} requested leave from ${startDate} to ${endDate}`,
-    leaveRequestId: leave._id,
-    status: "pending",
-    // Add metadata with employee ID
-    metadata: {
-      employeeName: `${user.firstName} ${user.lastName}`,
-      empId: user.empId, // ADD THIS
-      department: user.department?.name,
-      email: user.email,
-      startDate,
-      endDate,
-      reason
-    }
-  });
-
+    email: user.email,
+    startDate,
+    endDate,
+    reason
+  }
+});
   res.status(201).json({ message: "Leave request sent to Admin", leave });
 });
 
@@ -86,7 +92,7 @@ export const getInboxLeaveRequests = asyncHandler(async (req, res) => {
  */
 export const decideLeaveRequest = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
+  const { status, rejectionReason } = req.body;
   const user = req.user;
 
   if (!["approved", "rejected"].includes(status)) {
@@ -111,6 +117,14 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
     throw new Error("Department mismatch");
   }
 
+  // Store rejection reason if provided
+  if (status === "rejected") {
+    leave.rejectionReason = rejectionReason || "";
+  } else {
+    // Clear rejection reason if approving
+    leave.rejectionReason = "";
+  }
+  
   leave.status = status;
   await leave.save();
 
@@ -119,7 +133,7 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
     { leaveRequestId: leave._id },
     { 
       status: status,
-      $set: { seen: false } // Make it unread for the requester
+      $set: { seen: false }
     }
   );
 
@@ -127,13 +141,14 @@ export const decideLeaveRequest = asyncHandler(async (req, res) => {
   await Notification.create({
     type: "Leave",
     recipientRole: leave.requesterRole,
-    message: `Your leave request from ${leave.startDate.toDateString()} to ${leave.endDate.toDateString()} was ${status}`,
+    message: `Your leave request from ${leave.startDate.toDateString()} to ${leave.endDate.toDateString()} was ${status}${rejectionReason ? `: ${rejectionReason}` : ''}`,
     leaveRequestId: leave._id,
     status,
   });
 
   res.json({ message: `Leave request ${status} successfully`, leave });
 });
+
 /**
  * Get my leave requests (DeptHead or Employee)
  */

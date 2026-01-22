@@ -9,11 +9,11 @@ import {
   FaTimesCircle,
   FaFileAlt,
   FaDownload,
-  FaEye
+  FaEye,
+  FaExclamationTriangle
 } from "react-icons/fa";
 import axiosInstance from "../../utils/axiosInstance";
 import { toast } from "react-toastify";
-
 import { useSettings } from "../../contexts/SettingsContext";
 
 const EmployeeLeave = () => {
@@ -183,13 +183,25 @@ const EmployeeLeave = () => {
     }
   };
 
-  // Delete a leave request
-  const handleDelete = async (id) => {
-    if (!window.confirm(
-      language === "am" 
+  // Delete a leave request - Updated to allow deletion of any status
+  const handleDelete = async (id, status) => {
+    let confirmMessage = "";
+    
+    if (status === "pending") {
+      confirmMessage = language === "am" 
         ? "ይህን የእረፍት ጥያቄ መሰረዝ እንደምትፈልጉ ይረጋገጡ?" 
-        : "Are you sure you want to delete this leave request?"
-    )) return;
+        : "Are you sure you want to delete this leave request?";
+    } else if (status === "approved") {
+      confirmMessage = language === "am" 
+        ? "ይህ የተፈቀደ የእረፍት ጥያቄ ነው። መሰረዝ እንደምትፈልጉ ይረጋገጡ?" 
+        : "This is an approved leave request. Are you sure you want to delete it?";
+    } else if (status === "rejected") {
+      confirmMessage = language === "am" 
+        ? "ይህ የተቀበለ የእረፍት ጥያቄ ነው። መሰረዝ እንደምትፈልጉ ይረጋገጡ?" 
+        : "This is a rejected leave request. Are you sure you want to delete it?";
+    }
+
+    if (!window.confirm(confirmMessage)) return;
 
     try {
       await axiosInstance.delete(`/employee-leave/${id}`);
@@ -200,12 +212,12 @@ const EmployeeLeave = () => {
       );
       fetchMyLeaves();
     } catch (error) {
-      console.error(error);
-      toast.error(
-        language === "am" 
+      console.error("Delete error:", error);
+      const errorMsg = error.response?.data?.message || 
+        (language === "am" 
           ? "የእረፍት ጥያቄ ማሰረዝ አልተሳካም" 
-          : "Failed to delete leave request"
-      );
+          : "Failed to delete leave request");
+      toast.error(errorMsg);
     }
   };
 
@@ -264,9 +276,6 @@ const EmployeeLeave = () => {
 
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Sidebar */}
-     
-
       {/* Main Content */}
       <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
         {/* Header */}
@@ -580,6 +589,11 @@ const EmployeeLeave = () => {
                                     {getStatusText(leave.status)}
                                   </span>
                                 </div>
+                                {leave.approvedBy && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {language === "am" ? "በ:" : "By:"} {leave.approvedBy}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-3 py-2 md:px-4 md:py-3 whitespace-nowrap">
                                 <div className="flex items-center gap-2">
@@ -617,16 +631,31 @@ const EmployeeLeave = () => {
                                     </div>
                                   )}
                                   
-                                  {/* Delete Button */}
-                                  {leave.status === "pending" && (
+                                  {/* Delete Button - ALWAYS VISIBLE NOW */}
+                                  <div className="relative group">
                                     <button
-                                      onClick={() => handleDelete(leave._id)}
-                                      className="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                                      title={language === "am" ? "ሰርዝ" : "Delete"}
+                                      onClick={() => handleDelete(leave._id, leave.status)}
+                                      className={`p-1.5 rounded-lg transition-colors ${
+                                        leave.status === "approved" 
+                                          ? "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/30"
+                                          : leave.status === "rejected"
+                                          ? "text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:hover:bg-purple-900/30"
+                                          : "text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                      }`}
+                                      title={
+                                        leave.status === "pending" 
+                                          ? (language === "am" ? "ሰርዝ" : "Delete")
+                                          : (language === "am" ? "ከታሪክ ውስጥ ሰርዝ" : "Delete from history")
+                                      }
                                     >
                                       <FaTrash />
                                     </button>
-                                  )}
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
+                                      {leave.status === "pending" 
+                                        ? (language === "am" ? "ጥያቄ ሰርዝ" : "Delete request")
+                                        : (language === "am" ? "ከታሪክ ውስጥ ሰርዝ" : "Delete from history")}
+                                    </div>
+                                  </div>
                                 </div>
                               </td>
                             </tr>
@@ -658,15 +687,15 @@ const EmployeeLeave = () => {
           </div>
         </div>
 
-        {/* Info Box */}
+        {/* Info Box - Updated */}
         <div className="mt-6 md:mt-8 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
           <h3 className="text-sm md:text-base font-semibold text-blue-800 dark:text-blue-300 mb-2">
             {language === "am" ? "መረጃ" : "Information"}
           </h3>
           <ul className="text-xs md:text-sm text-blue-700 dark:text-blue-400 space-y-1">
             <li>• {language === "am" ? "የእረፍት ጥያቄዎች ለክፍል አለቃ ይላካሉ" : "Leave requests are sent to your Department Head"}</li>
-            <li>• {language === "am" ? "እረፍቶችን ከተፈቀዱ በኋላ ብቻ መውሰድ ይችላሉ" : "You can only take leaves after they are approved"}</li>
-            <li>• {language === "am" ? "በሂደት ላይ ያሉ ጥያቄዎችን መሰረዝ ይችላሉ" : "You can delete pending requests"}</li>
+            <li>• {language === "am" ? "ከታሪክ ውስጥ ማንኛውንም የእረፍት ጥያቄ መሰረዝ ይችላሉ" : "You can delete any leave request from your history"}</li>
+            <li>• {language === "am" ? "የተፈቀደ ወይም የተቀበለ ጥያቄ መሰረዝ ምንም ተጽዕኖ አያሳድርም" : "Deleting approved or rejected requests doesn't affect your leave balance"}</li>
           </ul>
         </div>
       </main>

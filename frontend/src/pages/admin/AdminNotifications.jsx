@@ -112,19 +112,15 @@ const getTypeIcon = (type) => {
   }
 };
 
-// FIXED: getFileIcon function to handle both string and object inputs
 const getFileIcon = (filename) => {
   try {
     if (!filename) return <FaFileAlt />;
     
-    // If filename is an object (attachment object), extract the filename
     let actualFilename;
     if (typeof filename === 'object' && filename !== null) {
-      // Try different possible property names from backend
       actualFilename = filename.filename || filename.name || filename.originalname || 
                        filename.url || filename.path || 'file';
       
-      // If we got a path/URL, extract just the filename
       if (actualFilename.includes('/') || actualFilename.includes('\\')) {
         actualFilename = actualFilename.split(/[/\\]/).pop();
       }
@@ -154,17 +150,14 @@ const getFileIcon = (filename) => {
   }
 };
 
-// Helper function to extract filename from attachment object
 const getFileName = (attachment) => {
   try {
     if (!attachment) return 'file';
     
     if (typeof attachment === 'object' && attachment !== null) {
-      // Try different possible property names from backend
       const filename = attachment.filename || attachment.name || attachment.originalname || 
                        attachment.url || attachment.path || 'attachment';
       
-      // If it's a path/URL, extract just the filename
       if (typeof filename === 'string' && (filename.includes('/') || filename.includes('\\'))) {
         return filename.split(/[/\\]/).pop();
       }
@@ -185,7 +178,6 @@ const getFileName = (attachment) => {
   }
 };
 
-// Helper function to get file URL from attachment object
 const getFileUrl = (attachment) => {
   try {
     if (!attachment) return '#';
@@ -369,7 +361,9 @@ const translations = {
     leaveStatus: "Leave Status",
     requisitionStatus: "Requisition Status",
     experienceStatus: "Work Experience Status",
-    applicationStatus: "Application Status"
+    applicationStatus: "Application Status",
+    rejectionReason: "Rejection Reason",
+    adminRemarks: "Admin Remarks"
   },
   am: {
     adminNotifications: "የአስተዳደር ማሳወቂያ ማዕከል",
@@ -532,7 +526,9 @@ const translations = {
     leaveStatus: "የፈቃድ ሁኔታ",
     requisitionStatus: "የጥያቄ ሁኔታ",
     experienceStatus: "የስራ ልምድ ሁኔታ",
-    applicationStatus: "የማመልከቻ ሁኔታ"
+    applicationStatus: "የማመልከቻ ሁኔታ",
+    rejectionReason: "የመቀባት ምክንያት",
+    adminRemarks: "የአስተዳደር አስተያየት"
   }
 };
 
@@ -552,6 +548,33 @@ const AdminNotifications = () => {
   const [decisionReason, setDecisionReason] = useState("");
   const [decisionLoading, setDecisionLoading] = useState(false);
   const [localComments, setLocalComments] = useState({});
+  const toggleDetails = (notif) => {
+    setDetailsOpen(prev => ({ ...prev, [notif._id]: !prev[notif._id] }));
+  };
+
+  const toggleAllDetails = (expand) => {
+    if (expand) {
+      const newState = {};
+      sortedNotifications.forEach(n => { newState[n._id] = true; });
+      setDetailsOpen(newState);
+    } else {
+      setDetailsOpen({});
+    }
+  };
+
+  // Add the extractRequestId function here too
+  const extractRequestId = (notif) => {
+    // Try different possible ID fields in order of preference
+    if (notif.relatedId) return notif.relatedId;
+    if (notif.metadata?._id) return notif.metadata._id;
+    if (notif.metadata?.referenceId) return notif.metadata.referenceId;
+    if (notif.metadata?.leaveRequestId) return notif.metadata.leaveRequestId;
+    if (notif.reference && notif.reference !== "undefined") return notif.reference;
+    if (notif.leaveRequestId) return notif.leaveRequestId;
+    
+    console.warn("Could not extract request ID from notification:", notif);
+    return null;
+  };
 
   useEffect(() => {
     const fetchNotifications = async () => {
@@ -592,8 +615,9 @@ const AdminNotifications = () => {
     const matchesStatus = filterStatus === "all" || notif.status === filterStatus;
     const matchesSearch = searchTerm === "" || 
       notif.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (notif.applicant?.name?.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (notif.leaveRequestId?.employeeName?.toLowerCase().includes(searchTerm.toLowerCase()));
+      (notif.metadata?.employeeName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (notif.metadata?.requesterName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (notif.applicant?.name?.toLowerCase().includes(searchTerm.toLowerCase()));
     
     return matchesType && matchesStatus && matchesSearch;
   });
@@ -654,43 +678,93 @@ const AdminNotifications = () => {
   try {
     let endpoint, data;
     
-    if (notif.type === "Leave") {
-      endpoint = `/leaves/requests/${notif.leaveRequestId?._id || notif.reference}/status`;
-      data = { status, adminComment: reason || undefined };
-    } else if (notif.type === "Requisition") {
-      endpoint = `/requisitions/${notif.reference}/status`;
-      data = { status, adminComment: reason || undefined };
-    } else if (notif.type === "Work Experience") {
-      endpoint = `/work-experience/${notif.reference}/status`;
-      data = { status, adminComment: reason || undefined };
-    } else if (notif.type === "Vacancy Application") {
-      endpoint = `/applications/${notif.reference}/status`;
-      data = { status, adminComment: reason || undefined };
-    } else {
-      throw new Error("Invalid notification type for decision");
+    // First, try to get the ID from the notification
+    let requestId = notif.relatedId || notif.reference;
+    
+    // If reference is an ObjectId string, use it
+    if (!requestId && notif.metadata?._id) {
+      requestId = notif.metadata._id;
     }
     
-    await axiosInstance.put(endpoint, data);
+    // If still no ID, try to extract from metadata
+    if (!requestId && notif.metadata?.referenceId) {
+      requestId = notif.metadata.referenceId;
+    }
     
-    // Refresh notifications from backend
-    const res = await axiosInstance.get("/notifications/my");
-    const seenState = JSON.parse(localStorage.getItem("notifSeen") || "{}");
+    console.log(`Making decision for ${notif.type}:`, { 
+      requestId, 
+      notifId: notif._id,
+      reference: notif.reference,
+      relatedId: notif.relatedId,
+      metadata: notif.metadata 
+    });
     
-    const merged = res.data.map((n) => ({
-      ...n,
-      seen: seenState[n._id] ?? n.seen,
-      status: n.status?.toLowerCase(),
-      timestamp: new Date(n.createdAt).getTime(),
-      metadata: n.metadata ? (typeof n.metadata === 'string' ? JSON.parse(n.metadata) : n.metadata) : {}
+    if (!requestId) {
+      throw new Error("Request ID not found in notification");
+    }
+    
+    switch (notif.type) {
+      case "Leave":
+      case "EmployeeLeaveApplied":
+        // Use the correct endpoint for leave decisions
+        endpoint = `/leaves/requests/${requestId}/status`;
+        data = { 
+          status: status === 'accept' ? 'approved' : 'rejected', 
+          adminComment: reason || undefined 
+        };
+        break;
+        
+      case "Requisition":
+        endpoint = `/requisitions/${requestId}/status`;
+        data = { 
+          status: status === 'accept' ? 'approved' : 'rejected', 
+          adminComment: reason || undefined 
+        };
+        break;
+        
+      case "Work Experience":
+      case "Work Experience Request":
+        endpoint = `/work-experience/${requestId}/status`;
+        data = { 
+          status: status === 'accept' ? 'approved' : 'rejected', 
+          adminComment: reason || undefined 
+        };
+        break;
+        
+      case "Vacancy Application":
+        endpoint = `/applications/${requestId}/status`;
+        data = { 
+          status: status === 'accept' ? 'approved' : 'rejected', 
+          adminComment: reason || undefined 
+        };
+        break;
+        
+      default:
+        throw new Error("Invalid notification type for decision");
+    }
+    
+    console.log(`Calling endpoint: ${endpoint}`, data);
+    
+    const response = await axiosInstance.put(endpoint, data);
+    
+    // Update the local notification state
+    setNotifications(prev => prev.map(n => {
+      if (n._id === notif._id) {
+        return {
+          ...n,
+          status: status === 'accept' ? 'approved' : 'rejected',
+          seen: true
+        };
+      }
+      return n;
     }));
     
-    setNotifications(merged);
-    
+    // Add local comment if reason provided
     if (reason && reason.trim()) {
       const newComment = {
         text: reason.trim(),
         type: 'admin',
-        status: status,
+        status: status === 'accept' ? 'approved' : 'rejected',
         createdAt: new Date().toISOString()
       };
       
@@ -709,29 +783,30 @@ const AdminNotifications = () => {
     alert(t.decisionSuccess);
   } catch (error) {
     console.error("Error making decision:", error);
-    alert(t.decisionError);
+    console.error("Error details:", {
+      message: error.message,
+      response: error.response?.data,
+      notification: notif
+    });
+    
+    let errorMessage = t.decisionError;
+    if (error.message.includes("Request ID not found")) {
+      errorMessage = language === "am" 
+        ? "የጥያቄ መታወቂያ አልተገኘም። እባክዎን ይህን ማሳወቂያ ከማስወገድ በፊት ለአስተዳደር ያሳውቁ።"
+        : "Request ID not found. Please report this issue to the administrator before deleting this notification.";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+    
+    alert(errorMessage);
   } finally {
     setDecisionLoading(false);
   }
 };
 
-  const toggleDetails = (notif) => {
-    setDetailsOpen(prev => ({ ...prev, [notif._id]: !prev[notif._id] }));
-  };
-
-  const toggleAllDetails = (expand) => {
-    if (expand) {
-      const newState = {};
-      sortedNotifications.forEach(n => { newState[n._id] = true; });
-      setDetailsOpen(newState);
-    } else {
-      setDetailsOpen({});
-    }
-  };
-
   const renderVacancyDetails = (notif) => {
-    const applicant = notif.applicant || notif.metadata?.applicant || {};
-    const vacancy = notif.vacancy || notif.metadata?.vacancy || {};
+    const applicant = notif.applicant || notif.metadata || {};
+    const vacancy = notif.vacancy || {};
     
     return (
       <div className="space-y-6">
@@ -742,21 +817,30 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.name}</p>
-              <p className="font-medium">{applicant.name || notif.metadata?.name || "N/A"}</p>
+              <p className="font-medium">{applicant.name || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
-              <p className="font-medium">{applicant.email || notif.metadata?.email || "N/A"}</p>
+              <p className="font-medium">{applicant.email || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.phone}</p>
-              <p className="font-medium">{applicant.phone || notif.metadata?.phone || "N/A"}</p>
+              <p className="font-medium">{applicant.phone || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.appliedAt}</p>
               <p className="font-medium">{formatSimpleDate(applicant.appliedAt || notif.createdAt)}</p>
             </div>
-            
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.applicationStatus}</p>
+              <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
+                {notif.status?.toUpperCase() || t.pending}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
+              <p className="font-medium">{applicant.empId || "N/A"}</p>
+            </div>
           </div>
         </div>
         
@@ -767,14 +851,12 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.jobTitle}</p>
-              <p className="font-medium">{vacancy.title || notif.metadata?.vacancyTitle || "N/A"}</p>
+              <p className="font-medium">{vacancy.title || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.department}</p>
-              <p className="font-medium">{vacancy.department || notif.metadata?.department || "N/A"}</p>
+              <p className="font-medium">{vacancy.department || "N/A"}</p>
             </div>
-            
-            
           </div>
         </div>
         
@@ -807,126 +889,6 @@ const AdminNotifications = () => {
           </div>
         )}
         
-        {/* No accept/reject buttons for vacancy applications */}
-        <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}>
-          <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"} flex items-center gap-2`}>
-            <FaInfoCircle /> 
-            {language === "am" 
-              ? "ይህ የስራ ማመልከቻ ነው። የተመልከተውን ውይይት ካደረጉ በኋላ ውሳኔዎን ያስቀምጡ።" 
-              : "This is a job application. Review the applicant's details and make your decision in your records."}
-          </p>
-        </div>
-      </div>
-    );
-  };
-
-  const renderLeaveDetails = (notif) => {
-    const leave = notif.leaveRequestId || notif.metadata || {};
-    const employee = leave.employeeId || leave.employee || {};
-    
-    return (
-      <div className="space-y-6">
-        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-            <FaUserTie /> {t.leaveRequestBy}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.name}</p>
-              <p className="font-medium">{employee.name || leave.employeeName || leave.requesterName || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeDepartment}</p>
-              <p className="font-medium">{employee.department || leave.department || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
-              <p className="font-medium">{employee.empId || leave.empId || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
-              <p className="font-medium">{employee.email || leave.requesterEmail || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterRole}</p>
-              <p className="font-medium">{leave.requesterRole === "DepartmentHead" ? t.departmentHead : t.regularEmployee}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
-              <p className="font-medium">{formatSimpleDate(leave.createdAt || notif.createdAt)}</p>
-            </div>
-          </div>
-        </div>
-        
-        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-            <FaCalendarCheck /> {t.leaveRequestDetails}
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.fromDate}</p>
-              <p className="font-medium">{formatSimpleDate(leave.startDate)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.toDate}</p>
-              <p className="font-medium">{formatSimpleDate(leave.endDate)}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.totalDays}</p>
-              <p className="font-medium">{calculateDays(leave.startDate, leave.endDate)}</p>
-            </div>
-            
-            
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.leaveStatus}</p>
-              <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
-                {notif.status?.toUpperCase() || t.pending}
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        {leave.reason && (
-          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-            <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-              <FaStickyNote /> {t.leaveReason}
-            </h4>
-            <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
-              <p className="whitespace-pre-wrap">{leave.reason}</p>
-            </div>
-          </div>
-        )}
-        
-        {(leave.attachments && leave.attachments.length > 0) && (
-          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
-            <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-              <FaPaperclip /> {t.attachments}
-            </h4>
-            <div className="space-y-2">
-              {leave.attachments.map((attachment, index) => (
-                <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-100 dark:bg-gray-700">
-                  <div className="flex items-center gap-3">
-                    {getFileIcon(attachment)}
-                    <div>
-                      <p className="font-medium">{getFileName(attachment)}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t.supportingDocument}</p>
-                    </div>
-                  </div>
-                  <a
-                    href={getFileUrl(attachment)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
-                  >
-                    <FaDownload /> {t.downloadAttachment}
-                  </a>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Decision section for pending leave requests */}
         {notif.status === "pending" && (
           <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
             <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
@@ -942,7 +904,7 @@ const AdminNotifications = () => {
                   onChange={(e) => setDecisionReason(e.target.value)}
                   placeholder={t.writeComment}
                   rows="3"
-                  className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
+                  className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300 ${
                     darkMode 
                       ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
                       : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
@@ -958,7 +920,7 @@ const AdminNotifications = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Leave' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Vacancy Application' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
                 >
                   <FaThumbsUp /> {t.acceptRequest}
@@ -966,7 +928,7 @@ const AdminNotifications = () => {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Leave' })}
+                  onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Vacancy Application' })}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
                 >
                   <FaThumbsDown /> {t.rejectRequest}
@@ -979,9 +941,266 @@ const AdminNotifications = () => {
     );
   };
 
+  const renderLeaveDetails = (notif) => {
+  // Try multiple sources for data
+  const metadata = notif.metadata || {};
+  const leave = notif.leaveRequestId || metadata;
+  
+  // Extract data with fallbacks
+  const employeeName = 
+    metadata.employeeName || 
+    metadata.requesterName || 
+    notif.employee?.name || 
+    "N/A";
+  
+  const department = 
+    metadata.department || 
+    notif.department || 
+    "N/A";
+  
+  const empId = 
+    metadata.empId || 
+    metadata.employeeId || 
+    "N/A";
+  
+  const email = 
+    metadata.email || 
+    metadata.requesterEmail || 
+    notif.employee?.email || 
+    "N/A";
+  
+  const startDate = 
+    metadata.startDate || 
+    leave?.startDate;
+  
+  const endDate = 
+    metadata.endDate || 
+    leave?.endDate;
+  
+  const reason = 
+    metadata.reason || 
+    leave?.reason;
+  
+  const leaveType = 
+    metadata.leaveType || 
+    "Annual Leave";
+  
+  const requesterRole = 
+    metadata.requesterRole || 
+    "Employee";
+  
+  const attachments = 
+    metadata.attachments || 
+    leave?.attachments || 
+    [];
+  
+  const createdAt = 
+    metadata.createdAt || 
+    notif.createdAt;
+  
+  // Debug logging
+  console.log("Leave notification data:", {
+    metadata,
+    extracted: {
+      employeeName,
+      department,
+      empId,
+      email,
+      startDate,
+      endDate,
+      reason,
+      leaveType,
+      requesterRole
+    }
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+        <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+          <FaUserTie /> {t.leaveRequestBy}
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeName}</p>
+            <p className="font-medium">{employeeName}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeDepartment}</p>
+            <p className="font-medium">{department}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
+            <p className="font-medium">{empId}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
+            <p className="font-medium">{email}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterRole}</p>
+            <p className="font-medium">
+              {requesterRole === "DepartmentHead" ? t.departmentHead : t.regularEmployee}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
+            <p className="font-medium">{formatSimpleDate(createdAt)}</p>
+          </div>
+        </div>
+      </div>
+      
+      <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+        <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+          <FaCalendarCheck /> {t.leaveRequestDetails}
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.fromDate}</p>
+            <p className="font-medium">{formatSimpleDate(startDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.toDate}</p>
+            <p className="font-medium">{formatSimpleDate(endDate)}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.totalDays}</p>
+            <p className="font-medium">
+              {calculateDays(startDate, endDate)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.leaveType}</p>
+            <p className="font-medium">{leaveType}</p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.leaveStatus}</p>
+            <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
+              {notif.status?.toUpperCase() || t.pending}
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      {reason && (
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaStickyNote /> {t.leaveReason}
+          </h4>
+          <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
+            <p className="whitespace-pre-wrap">{reason}</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Show rejection reason if rejected */}
+      {notif.status === "rejected" && (metadata.rejectionReason || metadata.adminComment) && (
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaExclamationTriangle className="text-red-500" /> {t.rejectionReason}
+          </h4>
+          <div className={`p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800`}>
+            <p className="whitespace-pre-wrap">{metadata.rejectionReason || metadata.adminComment}</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Show admin comments if exists */}
+      {metadata.adminComment && notif.status !== "rejected" && (
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaCommentAlt /> {t.adminRemarks}
+          </h4>
+          <div className={`p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800`}>
+            <p className="whitespace-pre-wrap">{metadata.adminComment}</p>
+          </div>
+        </div>
+      )}
+      
+      {attachments.length > 0 && (
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <FaPaperclip /> {t.attachments}
+          </h4>
+          <div className="space-y-2">
+            {attachments.map((attachment, index) => (
+              <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-100 dark:bg-gray-700">
+                <div className="flex items-center gap-3">
+                  {getFileIcon(attachment)}
+                  <div>
+                    <p className="font-medium">{getFileName(attachment)}</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{t.supportingDocument}</p>
+                  </div>
+                </div>
+                <a
+                  href={getFileUrl(attachment)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <FaDownload /> {t.downloadAttachment}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Decision section for pending leave requests */}
+      {notif.status === "pending" && (
+        <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+          <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+            {t.makeYourDecision}
+          </h4>
+          <div className="space-y-4">
+            <div>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+                <FaCommentAlt className="inline mr-2" /> {t.optionalComment}
+              </label>
+              <textarea
+                value={decisionReason}
+                onChange={(e) => setDecisionReason(e.target.value)}
+                placeholder={t.writeComment}
+                rows="3"
+                className={`w-full p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-300 ${
+                  darkMode 
+                    ? "bg-gray-700 border-gray-600 text-white placeholder-gray-400" 
+                    : "bg-gray-50 border border-gray-200 text-gray-900 placeholder-gray-500"
+                }`}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {language === "am" 
+                  ? "አስተያየት ለመቀባት ብቻ አማራጭ ነው። ለመቀበል ባዶ ሊተውት ይችላሉ።" 
+                  : "Comment is optional for rejection only. You can leave it blank for approval."}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowDecisionModal({ id: notif._id, action: 'accept', type: 'Leave' })}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all duration-300"
+              >
+                <FaThumbsUp /> {t.acceptRequest}
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowDecisionModal({ id: notif._id, action: 'reject', type: 'Leave' })}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 text-white transition-all duration-300"
+              >
+                <FaThumbsDown /> {t.rejectRequest}
+              </motion.button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
   const renderRequisitionDetails = (notif) => {
     const requisition = notif.metadata || {};
-    const requester = requisition.requester || {};
     
     return (
       <div className="space-y-6">
@@ -992,19 +1211,29 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterName}</p>
-              <p className="font-medium">{requester.name || requisition.requesterName || requisition.requestedBy || "N/A"}</p>
+              <p className="font-medium">{requisition.requesterName || requisition.requestedBy || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requesterDepartment}</p>
-              <p className="font-medium">{requester.department || requisition.department || "N/A"}</p>
+              <p className="font-medium">{requisition.department || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.email}</p>
-              <p className="font-medium">{requester.email || requisition.requestedByEmail || "N/A"}</p>
+              <p className="font-medium">{requisition.email || requisition.requestedByEmail || "N/A"}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.empId}</p>
+              <p className="font-medium">{requisition.empId || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.submittedDate}</p>
-              <p className="font-medium">{formatSimpleDate(requisition.requestDate || requisition.date || notif.createdAt)}</p>
+              <p className="font-medium">{formatSimpleDate(requisition.requestDate || requisition.createdAt || notif.createdAt)}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requisitionStatus}</p>
+              <p className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(notif.status)}`}>
+                {notif.status?.toUpperCase() || t.pending}
+              </p>
             </div>
           </div>
         </div>
@@ -1016,19 +1245,15 @@ const AdminNotifications = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.positionTitle}</p>
-              <p className="font-medium">{requisition.position || requisition.positionTitle || "N/A"}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.department}</p>
-              <p className="font-medium">{requisition.department || "N/A"}</p>
+              <p className="font-medium">{requisition.position || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.educationLevel}</p>
-              <p className="font-medium">{requisition.educationalLevel || requisition.educationLevel || requisition.education || "N/A"}</p>
+              <p className="font-medium">{requisition.educationLevel || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.quantityNeeded}</p>
-              <p className="font-medium">{requisition.quantity || requisition.quantityNeeded || "1"}</p>
+              <p className="font-medium">{requisition.quantity || "1"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.contractTerm}</p>
@@ -1051,11 +1276,11 @@ const AdminNotifications = () => {
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.experienceRequired}</p>
-              <p className="font-medium">{requisition.experience || requisition.experienceRequired || "N/A"}</p>
+              <p className="font-medium">{requisition.experience || "N/A"}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.requestDate}</p>
-              <p className="font-medium">{formatSimpleDate(requisition.requestDate || requisition.date)}</p>
+              <p className="font-medium">{formatSimpleDate(requisition.requestDate || requisition.createdAt)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.priorityLevel}</p>
@@ -1076,6 +1301,18 @@ const AdminNotifications = () => {
             </h4>
             <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
               <p className="whitespace-pre-wrap">{requisition.justification}</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Show admin comments if exists */}
+        {requisition.adminComment && (
+          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+            <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+              <FaCommentAlt /> {t.adminComment}
+            </h4>
+            <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
+              <p className="whitespace-pre-wrap">{requisition.adminComment}</p>
             </div>
           </div>
         )}
@@ -1177,7 +1414,7 @@ const AdminNotifications = () => {
               <p className="font-medium">{experience.employeeName || "N/A"}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.employeeDepartment}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{t.currentDepartment}</p>
               <p className="font-medium">{experience.department || "N/A"}</p>
             </div>
             <div>
@@ -1226,6 +1463,18 @@ const AdminNotifications = () => {
             </div>
           </div>
         </div>
+        
+        {/* Show admin comments if exists */}
+        {experience.adminComment && (
+          <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
+            <h4 className={`font-semibold mb-4 flex items-center gap-2 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+              <FaCommentAlt /> {t.adminComment}
+            </h4>
+            <div className={`p-4 rounded-lg ${darkMode ? "bg-gray-700" : "bg-gray-100"}`}>
+              <p className="whitespace-pre-wrap">{experience.adminComment}</p>
+            </div>
+          </div>
+        )}
         
         {/* Attachments section */}
         <div className={`p-5 rounded-xl ${darkMode ? "bg-gray-800" : "bg-white"}`}>
@@ -1748,15 +1997,15 @@ const AdminNotifications = () => {
               <p className={`mb-4 ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
                 {decisionReason && showDecisionModal.action === 'reject' ? (
                   language === 'am' 
-                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} በዚህ ምክንያት ለመቀባት እርግጠኛ ነዎት: "${decisionReason}"`
-                    : `Are you sure you want to reject this ${showDecisionModal.type.toLowerCase()} request with the reason: "${decisionReason}"?`
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : showDecisionModal.type === 'Work Experience' ? 'ስራ ልምድ ጥያቄ' : 'ማመልከቻ'} በዚህ ምክንያት ለመ${showDecisionModal.action === 'accept' ? 'ቀበል' : 'ቀባት'} እርግጠኛ ነዎት: "${decisionReason}"`
+                    : `Are you sure you want to ${showDecisionModal.action} this ${showDecisionModal.type.toLowerCase()} request with the reason: "${decisionReason}"?`
                 ) : showDecisionModal.action === 'reject' ? (
                   language === 'am'
-                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} ምንም ምክንያት ሳይጠቀሱ ለመቀባት እርግጠኛ ነዎት?`
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : showDecisionModal.type === 'Work Experience' ? 'ስራ ልምድ ጥያቄ' : 'ማመልከቻ'} ምንም ምክንያት ሳይጠቀሱ ለመቀባት እርግጠኛ ነዎት?`
                     : `Are you sure you want to reject this ${showDecisionModal.type.toLowerCase()} request without providing a reason?`
                 ) : (
                   language === 'am'
-                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : 'ስራ ልምድ ጥያቄ'} ለመቀበል እርግጠኛ ነዎት?`
+                    ? `ይህን ${showDecisionModal.type === 'Leave' ? 'ፈቃድ ጥያቄ' : showDecisionModal.type === 'Requisition' ? 'ጥያቄ' : showDecisionModal.type === 'Work Experience' ? 'ስራ ልምድ ጥያቄ' : 'ማመልከቻ'} ለመቀበል እርግጠኛ ነዎት?`
                     : `Are you sure you want to accept this ${showDecisionModal.type.toLowerCase()} request?`
                 )}
               </p>
@@ -1775,7 +2024,7 @@ const AdminNotifications = () => {
                   onClick={() => {
                     const notif = notifications.find(n => n._id === showDecisionModal.id);
                     if (notif) {
-                      handleDecision(notif, showDecisionModal.action === 'accept' ? 'approved' : 'rejected', decisionReason);
+                      handleDecision(notif, showDecisionModal.action, decisionReason);
                     }
                   }}
                   disabled={decisionLoading}
