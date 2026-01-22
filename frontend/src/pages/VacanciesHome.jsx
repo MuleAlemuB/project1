@@ -61,6 +61,7 @@ const VacanciesHome = () => {
   const [notification, setNotification] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [resumePreview, setResumePreview] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchVacancies();
@@ -68,6 +69,7 @@ const VacanciesHome = () => {
 
   const fetchVacancies = async () => {
     try {
+      setIsLoading(true);
       const res = await axios.get("/vacancies");
       setVacancies(res.data);
 
@@ -93,11 +95,10 @@ const VacanciesHome = () => {
       });
       setNewApplications(apps);
     } catch (err) {
-      console.error(err);
-      showNotification(
-        language === "am" ? "የስራ ቦታዎችን ማምጣት አልተሳካም" : "Failed to fetch vacancies",
-        "error"
-      );
+      console.error("Error fetching vacancies:", err);
+      // Removed the error notification on initial load
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -229,6 +230,7 @@ const VacanciesHome = () => {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      // Show success notification with UI message
       showNotification(
         language === "am"
           ? "ማመልከቻዎ በተሳካ ሁኔታ ተልኳል!"
@@ -249,7 +251,7 @@ const VacanciesHome = () => {
       setFormErrors({});
       fetchVacancies();
     } catch (err) {
-      console.error(err);
+      console.error("Error submitting application:", err);
       showNotification(
         language === "am" 
           ? "ማመልከቻዎን ማቅረብ አልተሳካም" 
@@ -300,14 +302,6 @@ const VacanciesHome = () => {
     return diffDays;
   };
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   return (
     <div
       className={`min-h-screen p-4 md:p-6 lg:p-8 transition-colors duration-500 ${
@@ -349,204 +343,211 @@ const VacanciesHome = () => {
           )}
         </div>
 
-        {/* Vacancies Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-          {vacancies.length > 0 ? (
-            vacancies.map((v) => {
-              const viewed = JSON.parse(localStorage.getItem("viewedVacancies") || "[]");
-              const isNew = !viewed.includes(v._id) &&
-                new Date() - new Date(v.postDate) < 24 * 60 * 60 * 1000;
-              const deadlinePassed = isDeadlinePassed(v.deadline);
-              const remainingDays = getRemainingDays(v.deadline);
+        {/* Loading State */}
+        {isLoading ? (
+          <div className="flex justify-center items-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : (
+          /* Vacancies Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+            {vacancies.length > 0 ? (
+              vacancies.map((v) => {
+                const viewed = JSON.parse(localStorage.getItem("viewedVacancies") || "[]");
+                const isNew = !viewed.includes(v._id) &&
+                  new Date() - new Date(v.postDate) < 24 * 60 * 60 * 1000;
+                const deadlinePassed = isDeadlinePassed(v.deadline);
+                const remainingDays = getRemainingDays(v.deadline);
 
-              return (
-                <div
-                  key={v._id}
-                  className={`relative rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
-                    darkMode 
-                      ? "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700" 
-                      : "bg-white border border-gray-200"
-                  } ${deadlinePassed ? "opacity-80" : ""}`}
-                >
-                  {/* Badges Container */}
-                  <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
-                    {/* New Badge */}
-                    {isNew && !deadlinePassed && (
-                      <span className="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 animate-pulse">
-                        <FaBell className="text-xs" /> 
-                        {language === "am" ? "አዲስ" : "New"}
-                      </span>
-                    )}
+                return (
+                  <div
+                    key={v._id}
+                    className={`relative rounded-2xl shadow-xl overflow-hidden transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl ${
+                      darkMode 
+                        ? "bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700" 
+                        : "bg-white border border-gray-200"
+                    } ${deadlinePassed ? "opacity-80" : ""}`}
+                  >
+                    {/* Badges Container */}
+                    <div className="absolute top-3 right-3 flex flex-col gap-2 z-10">
+                      {/* New Badge */}
+                      {isNew && !deadlinePassed && (
+                        <span className="bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1 animate-pulse">
+                          <FaBell className="text-xs" /> 
+                          {language === "am" ? "አዲስ" : "New"}
+                        </span>
+                      )}
 
-                    {/* Deadline Passed Badge */}
-                    {deadlinePassed && (
-                      <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
-                        <FaTimes className="text-xs" /> 
-                        {language === "am" ? "ጊዜ አልፏል" : "Closed"}
-                      </span>
-                    )}
+                      {/* Deadline Passed Badge */}
+                      {deadlinePassed && (
+                        <span className="bg-gradient-to-r from-red-500 to-red-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                          <FaTimes className="text-xs" /> 
+                          {language === "am" ? "ጊዜ አልፏል" : "Closed"}
+                        </span>
+                      )}
 
-                    {/* Remaining Days Badge */}
-                    {!deadlinePassed && remainingDays <= 7 && (
-                      <span className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg">
-                        {remainingDays} {language === "am" ? "ቀናት ቀርተዋል" : "days left"}
-                      </span>
-                    )}
+                      {/* Remaining Days Badge */}
+                      {!deadlinePassed && remainingDays <= 7 && (
+                        <span className="bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg">
+                          {remainingDays} {language === "am" ? "ቀናት ቀርተዋል" : "days left"}
+                        </span>
+                      )}
 
-                    {/* New Applications Badge */}
-                    {newApplications[v._id] > 0 && (
-                      <span className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
-                        <FaBell className="text-xs" /> 
-                        {newApplications[v._id]}+ {language === "am" ? "አዲስ" : "New"}
-                      </span>
-                    )}
-                  </div>
+                      {/* New Applications Badge */}
+                      {newApplications[v._id] > 0 && (
+                        <span className="bg-gradient-to-r from-blue-500 to-cyan-500 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1">
+                          <FaBell className="text-xs" /> 
+                          {newApplications[v._id]}+ {language === "am" ? "አዲስ" : "New"}
+                        </span>
+                      )}
+                    </div>
 
-                  {/* Vacancy Content */}
-                  <div className="p-6 flex flex-col justify-between h-full">
-                    <div>
-                      {/* Title */}
-                      <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-4 line-clamp-2">
-                        {v.title}
-                      </h2>
+                    {/* Vacancy Content */}
+                    <div className="p-6 flex flex-col justify-between h-full">
+                      <div>
+                        {/* Title */}
+                        <h2 className="text-xl md:text-2xl font-bold text-gray-800 dark:text-white mb-4 line-clamp-2">
+                          {v.title}
+                        </h2>
 
-                      {/* Info Grid */}
-                      <div className="grid gap-3 mb-4">
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-lg ${
-                            darkMode ? "bg-gray-700" : "bg-gray-100"
-                          }`}>
-                            <FaBuilding className="text-indigo-500" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {language === "am" ? "ዲፓርትመንት" : "Department"}
-                            </p>
-                            <p className="font-medium text-sm">{v.department}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-lg ${
-                            darkMode ? "bg-gray-700" : "bg-gray-100"
-                          }`}>
-                            <FaBriefcase className="text-purple-500" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {language === "am" ? "የስራ አይነት" : "Position"}
-                            </p>
-                            <p className="font-medium text-sm">{v.position}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-lg ${
-                            darkMode ? "bg-gray-700" : "bg-gray-100"
-                          }`}>
-                            <FaClock className="text-yellow-500" />
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {language === "am" ? "የስራ አይነት" : "Employment Type"}
-                            </p>
-                            <p className="font-medium text-sm">{v.employmentType}</p>
-                          </div>
-                        </div>
-
-                        {v.qualification && (
+                        {/* Info Grid */}
+                        <div className="grid gap-3 mb-4">
                           <div className="flex items-center gap-2">
                             <div className={`p-2 rounded-lg ${
                               darkMode ? "bg-gray-700" : "bg-gray-100"
                             }`}>
-                              <FaGraduationCap className="text-green-500" />
+                              <FaBuilding className="text-indigo-500" />
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {language === "am" ? "ትምህርት" : "Qualification"}
+                                {language === "am" ? "ዲፓርትመንት" : "Department"}
                               </p>
-                              <p className="font-medium text-sm">{v.qualification}</p>
+                              <p className="font-medium text-sm">{v.department}</p>
                             </div>
                           </div>
-                        )}
 
-                        {v.salary && (
                           <div className="flex items-center gap-2">
                             <div className={`p-2 rounded-lg ${
                               darkMode ? "bg-gray-700" : "bg-gray-100"
                             }`}>
-                              <FaDollarSign className="text-teal-500" />
+                              <FaBriefcase className="text-purple-500" />
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {language === "am" ? "ደመወዝ" : "Salary"}
+                                {language === "am" ? "የስራ አይነት" : "Position"}
                               </p>
-                              <p className="font-medium text-sm">{v.salary}</p>
+                              <p className="font-medium text-sm">{v.position}</p>
                             </div>
                           </div>
-                        )}
 
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-lg ${
-                            darkMode ? "bg-gray-700" : "bg-gray-100"
-                          }`}>
-                            <FaCalendarAlt className="text-red-400" />
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 rounded-lg ${
+                              darkMode ? "bg-gray-700" : "bg-gray-100"
+                            }`}>
+                              <FaClock className="text-yellow-500" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {language === "am" ? "የስራ አይነት" : "Employment Type"}
+                              </p>
+                              <p className="font-medium text-sm">{v.employmentType}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {language === "am" ? "መዝጊያ ቀን" : "Deadline"}
-                            </p>
-                            <p className="font-medium text-sm">
-                              {new Date(v.deadline).toLocaleDateString()}
-                              {!deadlinePassed && (
-                                <span className={`ml-2 text-xs ${remainingDays <= 3 ? 'text-red-500' : 'text-green-500'}`}>
-                                  ({remainingDays} {language === "am" ? "ቀናት ቀርተዋል" : "days left"})
-                                </span>
-                              )}
-                            </p>
+
+                          {v.qualification && (
+                            <div className="flex items-center gap-2">
+                              <div className={`p-2 rounded-lg ${
+                                darkMode ? "bg-gray-700" : "bg-gray-100"
+                              }`}>
+                                <FaGraduationCap className="text-green-500" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {language === "am" ? "ትምህርት" : "Qualification"}
+                                </p>
+                                <p className="font-medium text-sm">{v.qualification}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {v.salary && (
+                            <div className="flex items-center gap-2">
+                              <div className={`p-2 rounded-lg ${
+                                darkMode ? "bg-gray-700" : "bg-gray-100"
+                              }`}>
+                                <FaDollarSign className="text-teal-500" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">
+                                  {language === "am" ? "ደመወዝ" : "Salary"}
+                                </p>
+                                <p className="font-medium text-sm">{v.salary}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <div className={`p-2 rounded-lg ${
+                              darkMode ? "bg-gray-700" : "bg-gray-100"
+                            }`}>
+                              <FaCalendarAlt className="text-red-400" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {language === "am" ? "መዝጊያ ቀን" : "Deadline"}
+                              </p>
+                              <p className="font-medium text-sm">
+                                {new Date(v.deadline).toLocaleDateString()}
+                                {!deadlinePassed && (
+                                  <span className={`ml-2 text-xs ${remainingDays <= 3 ? 'text-red-500' : 'text-green-500'}`}>
+                                    ({remainingDays} {language === "am" ? "ቀናት ቀርተዋል" : "days left"})
+                                  </span>
+                                )}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Apply Button */}
-                    <button
-                      onClick={() => handleOpenModal(v)}
-                      disabled={deadlinePassed}
-                      className={`mt-6 w-full py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 ${
-                        deadlinePassed
-                          ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
-                          : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
-                      }`}
-                    >
-                      {deadlinePassed
-                        ? language === "am" 
-                          ? "ጊዜ አልፏል" 
-                          : "Deadline Passed"
-                        : language === "am"
-                          ? "አሁን ይመልከቱ"
-                          : "Apply Now"}
-                    </button>
+                      {/* Apply Button */}
+                      <button
+                        onClick={() => handleOpenModal(v)}
+                        disabled={deadlinePassed}
+                        className={`mt-6 w-full py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 ${
+                          deadlinePassed
+                            ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed"
+                            : "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+                        }`}
+                      >
+                        {deadlinePassed
+                          ? language === "am" 
+                            ? "ጊዜ አልፏል" 
+                            : "Deadline Passed"
+                          : language === "am"
+                            ? "አሁን ይመልከቱ"
+                            : "Apply Now"}
+                      </button>
+                    </div>
                   </div>
+                );
+              })
+            ) : (
+              <div className="col-span-3 text-center py-16">
+                <div className="inline-block p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
+                  <FaBriefcase className="text-4xl text-gray-400 dark:text-gray-600" />
                 </div>
-              );
-            })
-          ) : (
-            <div className="col-span-3 text-center py-16">
-              <div className="inline-block p-4 bg-gray-100 dark:bg-gray-800 rounded-full mb-4">
-                <FaBriefcase className="text-4xl text-gray-400 dark:text-gray-600" />
+                <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                  {language === "am" ? "ምንም ክፍት የሥራ ቦታዎች የሉም" : "No vacancies available"}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-500 max-w-md mx-auto">
+                  {language === "am" 
+                    ? "በአሁኑ ጊዜ ምንም ክፍት የስራ ቦታዎች የሉም። እባክዎ ቆይተው ይመልከቱ።"
+                    : "There are currently no open positions. Please check back later."}
+                </p>
               </div>
-              <h3 className="text-xl font-semibold text-gray-600 dark:text-gray-400 mb-2">
-                {language === "am" ? "ምንም ክፍት የሥራ ቦታዎች የሉም" : "No vacancies available"}
-              </h3>
-              <p className="text-gray-500 dark:text-gray-500 max-w-md mx-auto">
-                {language === "am" 
-                  ? "በአሁኑ ጊዜ ምንም ክፍት የስራ ቦታዎች የሉም። እባክዎ ቆይተው ይመልከቱ።"
-                  : "There are currently no open positions. Please check back later."}
-              </p>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Application Modal */}
@@ -814,7 +815,7 @@ const VacanciesHome = () => {
                 </div>
               </div>
 
-                            {/* Submit Buttons */}
+              {/* Submit Buttons */}
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"

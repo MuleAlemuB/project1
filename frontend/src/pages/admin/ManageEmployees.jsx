@@ -9,7 +9,7 @@ import {
   FaRing, FaBriefcase, FaCalendarAlt, FaGraduationCap,
   FaDollarSign, FaMapMarkerAlt, FaShieldAlt, FaSync,
   FaTimes, FaCheck, FaUserTie, FaLock, FaUserCircle,
-  FaCopy, FaExclamationTriangle
+  FaCopy, FaExclamationTriangle, FaUserCheck
 } from "react-icons/fa";
 import { IoMdPerson, IoIosBusiness } from "react-icons/io";
 import { MdWork, MdEmail, MdPhone, MdLocationOn } from "react-icons/md";
@@ -124,6 +124,7 @@ const ManageEmployee = () => {
       passwordValidation: "Password must be at least 8 characters with uppercase, lowercase, number, and special character",
       idInUse: "Employee ID is already in use",
       nameValidation: "Only letters and spaces allowed",
+      departmentHeadExists: "This department already has a Department Head. Please assign a different role or select another department.",
       
       // Status
       processing: "Processing...",
@@ -270,6 +271,7 @@ const ManageEmployee = () => {
       passwordValidation: "የይለፍ ቃል ቢያንስ 8 ፊደላት መሆን አለበት፣ ከዚህም በላይ አቢይ፣ ትንሽ፣ ቁጥር እና ልዩ ምልክት ሊኖሩት ይገባል",
       idInUse: "የሰራተኛ መታወቂያ አስቀድሞ በመጠቀም ላይ ነው",
       nameValidation: "ፊደላት እና ስፋቶች ብቻ ይፈቀዳሉ",
+      departmentHeadExists: "ይህ ክፍል ቀድሞውኑ የክፍል ሃላፊ አለው። እባክዎ የተለየ ሚና ይምረጡ ወይም ሌላ ክፍል ይምረጡ።",
       
       // Status
       processing: "በማቀናበር ላይ...",
@@ -302,7 +304,7 @@ const ManageEmployee = () => {
       strong: "ጠንካራ",
       medium: "መካከለኛ",
       weak: "ደካማ",
-      passwordResetMessage: "አዲስ የይለፍ ቃል ተፈጥሯል። እባክዎ ለሰራተኛው ያሳውቁ",
+      passwordResetMessage: "New password has been generated. Please inform the employee",
       
       // Language
       language: "ቋንቋ",
@@ -352,7 +354,8 @@ const ManageEmployee = () => {
     empId: "",
     password: "",
     showCredentials: false,
-    isNewPassword: false
+    isNewPassword: false,
+    resetForEmployee: null
   });
   const [usedEmpIds, setUsedEmpIds] = useState(new Set());
   const [isLoading, setIsLoading] = useState(false);
@@ -365,6 +368,7 @@ const ManageEmployee = () => {
     label: "",
     color: ""
   });
+  const [validationError, setValidationError] = useState("");
 
   // Password validation regex
   const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -443,6 +447,19 @@ const ManageEmployee = () => {
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 2000);
     });
+  };
+
+  // Check if department already has a department head
+  const checkDepartmentHead = (departmentId, role, currentEmployeeId = null) => {
+    if (role !== "departmenthead") return false;
+    
+    const existingDeptHead = employees.find(emp => 
+      emp.department?._id === departmentId && 
+      emp.role === "departmenthead" &&
+      emp._id !== currentEmployeeId
+    );
+    
+    return existingDeptHead;
   };
 
   // fetch departments
@@ -539,9 +556,28 @@ const ManageEmployee = () => {
     // Employee ID validation (check uniqueness if editing)
     if (name === "empId" && editingId) {
       if (!isEmpIdUnique(value)) {
-        alert(`${t.idInUse}: "${value}"`);
+        setValidationError(`${t.idInUse}: "${value}"`);
         return;
       }
+    }
+
+    // Check for existing department head when role or department changes
+    if ((name === "role" && value === "departmenthead") || (name === "department" && formData.role === "departmenthead")) {
+      const deptId = name === "department" ? value : formData.department;
+      const roleValue = name === "role" ? value : formData.role;
+      
+      if (roleValue === "departmenthead" && deptId) {
+        const existingDeptHead = checkDepartmentHead(deptId, roleValue, editingId);
+        if (existingDeptHead) {
+          setValidationError(t.departmentHeadExists);
+          return;
+        }
+      }
+    }
+
+    // Clear validation error if conditions are met
+    if (validationError && name !== "empId") {
+      setValidationError("");
     }
 
     setFormData({ ...formData, [name]: value });
@@ -577,7 +613,8 @@ const ManageEmployee = () => {
       empId: "",
       password: "",
       showCredentials: false,
-      isNewPassword: false
+      isNewPassword: false,
+      resetForEmployee: null
     });
     setPhotoPreview(null);
     setShowForm(false);
@@ -585,28 +622,43 @@ const ManageEmployee = () => {
     setSuccessMessage("");
     setShowPassword(false);
     setPasswordStrength({ score: 0, label: t.weak, color: "bg-red-500" });
+    setValidationError("");
   };
 
   // Handle submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    setValidationError("");
 
     if (!/^\d{10}$/.test(formData.phoneNumber)) {
       setIsLoading(false);
-      return alert(t.phoneValidation);
+      setValidationError(t.phoneValidation);
+      return;
     }
 
     // For new employees, validate password meets requirements
     if (!editingId && !isValidPassword(formData.password)) {
       setIsLoading(false);
-      return alert(t.passwordValidation);
+      setValidationError(t.passwordValidation);
+      return;
     }
 
     // Check if Employee ID is unique
     if (!isEmpIdUnique(formData.empId)) {
       setIsLoading(false);
-      return alert(`${t.idInUse}: "${formData.empId}"`);
+      setValidationError(`${t.idInUse}: "${formData.empId}"`);
+      return;
+    }
+
+    // Check for existing department head
+    if (formData.role === "departmenthead" && formData.department) {
+      const existingDeptHead = checkDepartmentHead(formData.department, formData.role, editingId);
+      if (existingDeptHead) {
+        setIsLoading(false);
+        setValidationError(t.departmentHeadExists);
+        return;
+      }
     }
 
     // Prepare data for submission
@@ -651,19 +703,16 @@ const ManageEmployee = () => {
         setUsedEmpIds(prev => new Set([...prev, submitData.empId]));
         
         // Show credentials to user after successful creation
-        const successMsg = `${t.employeeCreated} ${t.tellEmployeePassword}: ${submitData.password} ${t.andIdIs}: ${submitData.empId}`;
-        setSuccessMessage(successMsg);
+        setSuccessMessage(t.employeeCreated);
         setGeneratedCredentials({
           empId: submitData.empId,
           password: submitData.password,
           showCredentials: true,
-          isNewPassword: true
+          isNewPassword: true,
+          resetForEmployee: null
         });
         
-        // Show credentials for a while before closing form
-        setTimeout(() => {
-          setGeneratedCredentials(prev => ({ ...prev, showCredentials: false }));
-        }, 10000);
+        // REMOVED: Auto-hide timeout - admin will manually close
       }
 
       fetchEmployees();
@@ -672,7 +721,7 @@ const ManageEmployee = () => {
       }
     } catch (err) {
       console.error("Error adding/updating employee:", err.response?.data || err);
-      alert(err.response?.data?.message || "Failed to save employee.");
+      setValidationError(err.response?.data?.message || (language === "en" ? "Failed to save employee." : "ሰራተኛን ለማስቀመጥ አልተሳካም።"));
     } finally {
       setIsLoading(false);
     }
@@ -709,10 +758,12 @@ const ManageEmployee = () => {
       empId: "",
       password: "",
       showCredentials: false,
-      isNewPassword: false
+      isNewPassword: false,
+      resetForEmployee: null
     });
     setPhotoPreview(emp.photo ? `http://localhost:5000${emp.photo}` : null);
     setPasswordStrength({ score: 0, label: t.weak, color: "bg-red-500" });
+    setValidationError("");
   };
 
   const handleDelete = async (id) => {
@@ -736,96 +787,101 @@ const ManageEmployee = () => {
   // Handle reset password
   const handleResetPassword = async () => {
     if (!editingId) {
-      alert("No employee selected for password reset.");
+      alert(language === "en" ? "No employee selected for password reset." : "ለየይለፍ ቃል ለውጥ ምንም ሰራተኛ አልተመረጠም።");
       return;
     }
     
     const newPassword = generateSecurePassword();
+    const employee = employees.find(emp => emp._id === editingId);
     
-    if (!window.confirm(language === "en"
-      ? `Reset this employee's password to a new secure password?\n\nNew Password: ${newPassword}\n\nPlease save this password and inform the employee.`
-      : `የዚህ ሰራተኛ የይለፍ ቃል ወደ አዲስ ደህንነቱ የተጠበቀ የይለፍ ቃል እንደገና ማስጀመር ይፈልጋሉ?\n\nአዲስ የይለፍ ቃል: ${newPassword}\n\nእባክዎ ይህንን የይለፍ ቃል ያስቀምጡ እና ለሰራተኛው ያሳውቁ።`)) return;
+    if (!employee) {
+      alert(language === "en" ? "Employee not found." : "ሰራተኛ አልተገኘም።");
+      return;
+    }
     
-    try {
-      setIsLoading(true);
+    // Show confirmation in UI instead of alert
+    if (window.confirm(language === "en"
+      ? "Reset this employee's password to a new secure password?"
+      : "የዚህ ሰራተኛ የይለፍ ቃል ወደ አዲስ ደህንነቱ የተጠበቀ የይለፍ ቃል እንደገና ማስጀመር ይፈልጋሉ?")) {
       
-      // Call the reset password endpoint
-      const response = await axiosInstance.put(
-        `/employees/reset-password/${editingId}`, 
-        { newPassword }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      // Show credentials to admin
-      const employee = employees.find(emp => emp._id === editingId);
-      if (employee) {
+      try {
+        setIsLoading(true);
+        
+        // Call the reset password endpoint
+        const response = await axiosInstance.put(
+          `/employees/reset-password/${editingId}`, 
+          { newPassword }, 
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        
+        // Show credentials in UI
         setGeneratedCredentials({
           empId: employee.empId,
           password: newPassword,
           showCredentials: true,
-          isNewPassword: true
+          isNewPassword: true,
+          resetForEmployee: {
+            name: `${employee.firstName} ${employee.lastName}`,
+            id: employee._id
+          }
         });
         
         const resetMsg = language === "en"
-          ? `Password reset successfully! New password: ${newPassword} - Please inform the employee.`
-          : `የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል! አዲስ የይለፍ ቃል: ${newPassword} - እባክዎ ለሰራተኛው ያሳውቁ።`;
+          ? `Password reset for ${employee.firstName} ${employee.lastName}!`
+          : `ለ${employee.firstName} ${employee.lastName} የይለፍ ቃል ተቀይሯል!`;
         
         setSuccessMessage(resetMsg);
         setTimeout(() => setSuccessMessage(""), 5000);
         
-        // Hide credentials after 10 seconds
-        setTimeout(() => {
-          setGeneratedCredentials(prev => ({ ...prev, showCredentials: false }));
-        }, 10000);
-      }
-      
-      // Refresh employee list
-      fetchEmployees();
-      
-    } catch (err) {
-      console.error("Error resetting password:", err.response?.data || err);
-      
-      // Try alternative approach if the first one fails
-      try {
-        // Alternative: Update the employee directly with the new password
-        const updateData = { password: newPassword };
-        await axiosInstance.put(
-          `/employees/${editingId}`, 
-          updateData, 
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+        // REMOVED: Auto-hide timeout - admin will manually close
         
-        const employee = employees.find(emp => emp._id === editingId);
-        if (employee) {
+        // Refresh employee list
+        fetchEmployees();
+        
+      } catch (err) {
+        console.error("Error resetting password:", err.response?.data || err);
+        
+        // Try alternative approach if the first one fails
+        try {
+          // Alternative: Update the employee directly with the new password
+          const updateData = { password: newPassword };
+          await axiosInstance.put(
+            `/employees/${editingId}`, 
+            updateData, 
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          
+          // Show credentials in UI
           setGeneratedCredentials({
             empId: employee.empId,
             password: newPassword,
             showCredentials: true,
-            isNewPassword: true
+            isNewPassword: true,
+            resetForEmployee: {
+              name: `${employee.firstName} ${employee.lastName}`,
+              id: employee._id
+            }
           });
           
           const resetMsg = language === "en"
-            ? `Password reset successfully! New password: ${newPassword} - Please inform the employee.`
-            : `የይለፍ ቃል በተሳካ ሁኔታ ተቀይሯል! አዲስ የይለፍ ቃል: ${newPassword} - እባክዎ ለሰራተኛው ያሳውቁ።`;
+            ? `Password reset for ${employee.firstName} ${employee.lastName}!`
+            : `ለ${employee.firstName} ${employee.lastName} የይለፍ ቃል ተቀይሯል!`;
           
           setSuccessMessage(resetMsg);
           setTimeout(() => setSuccessMessage(""), 5000);
           
-          // Hide credentials after 10 seconds
-          setTimeout(() => {
-            setGeneratedCredentials(prev => ({ ...prev, showCredentials: false }));
-          }, 10000);
+          // REMOVED: Auto-hide timeout - admin will manually close
+          
+          fetchEmployees();
+        } catch (secondErr) {
+          console.error("Alternative password reset also failed:", secondErr);
+          setValidationError(language === "en" 
+            ? "Failed to reset password. Please try again." 
+            : "የይለፍ ቃልን ለመቀየር አልተሳካም። እባክዎ እንደገና ይሞክሩ።");
         }
-        
-        fetchEmployees();
-      } catch (secondErr) {
-        console.error("Alternative password reset also failed:", secondErr);
-        alert(language === "en" 
-          ? "Failed to reset password. Please try again." 
-          : "የይለፍ ቃልን ለመቀየር አልተሳካም። እባክዎ እንደገና ይሞክሩ።");
+      } finally {
+        setIsLoading(false);
       }
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -849,7 +905,8 @@ const ManageEmployee = () => {
         empId: empId,
         password: password,
         showCredentials: true,
-        isNewPassword: true
+        isNewPassword: true,
+        resetForEmployee: null
       });
       setPasswordStrength(checkPasswordStrength(password));
     }, 100);
@@ -1003,6 +1060,22 @@ const ManageEmployee = () => {
 
             {/* Form Content */}
             <form onSubmit={handleSubmit} className="p-6">
+              {/* Validation Error */}
+              {validationError && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-6 p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border-2 border-red-200 dark:border-red-800"
+                >
+                  <div className="flex items-center space-x-3">
+                    <FaExclamationTriangle className="text-red-600 dark:text-red-400 text-2xl" />
+                    <p className="text-red-800 dark:text-red-300 font-medium">
+                      {validationError}
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Credentials Display for New Employees or Password Reset */}
               {generatedCredentials.showCredentials && (
                 <motion.div
@@ -1010,11 +1083,23 @@ const ManageEmployee = () => {
                   animate={{ opacity: 1, y: 0 }}
                   className="mb-6 p-4 bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/30 dark:to-orange-900/30 rounded-lg border-2 border-yellow-200 dark:border-yellow-800"
                 >
-                  <div className="flex items-center space-x-3 mb-4">
-                    <FaExclamationTriangle className="text-yellow-600 dark:text-yellow-400 text-2xl" />
-                    <h4 className="font-bold text-gray-800 dark:text-white text-lg">
-                      {t.saveCredentials}
-                    </h4>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <FaExclamationTriangle className="text-yellow-600 dark:text-yellow-400 text-2xl" />
+                      <h4 className="font-bold text-gray-800 dark:text-white text-lg">
+                        {generatedCredentials.resetForEmployee 
+                          ? `${t.passwordReset} - ${generatedCredentials.resetForEmployee.name}`
+                          : t.saveCredentials}
+                      </h4>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setGeneratedCredentials(prev => ({ ...prev, showCredentials: false }))}
+                      className="p-1 hover:bg-yellow-100 dark:hover:bg-yellow-800 rounded-full transition"
+                      title={t.close}
+                    >
+                      <FaTimes className="text-yellow-600 dark:text-yellow-400" />
+                    </button>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -1107,9 +1192,11 @@ const ManageEmployee = () => {
                   <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg">
                     <p className="text-sm text-yellow-800 dark:text-yellow-300">
                       <FaExclamationTriangle className="inline mr-2" />
-                      {generatedCredentials.isNewPassword
-                        ? t.passwordResetMessage
-                        : t.tellEmployeePassword}
+                      {generatedCredentials.isNewPassword && generatedCredentials.resetForEmployee
+                        ? `${t.passwordResetMessage} ${t.tellEmployeePassword}: ${generatedCredentials.password}`
+                        : generatedCredentials.isNewPassword
+                          ? `${t.tellEmployeePassword}: ${generatedCredentials.password} ${t.andIdIs}: ${generatedCredentials.empId}`
+                          : t.tellEmployeePassword}
                     </p>
                   </div>
                 </motion.div>
@@ -1401,11 +1488,17 @@ const ManageEmployee = () => {
                   </h4>
                 </div>
 
-                {/* ... Rest of the form fields remain the same ... */}
+                {/* Department Field with Department Head Check */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     <FaBuilding className="inline mr-1" />
                     {t.department} *
+                    {formData.role === "departmenthead" && formData.department && (
+                      <span className="ml-2 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 px-2 py-1 rounded">
+                        <FaUserCheck className="inline mr-1" />
+                        {language === "en" ? "Department Head Role" : "የክፍል ሃላፊ ሚና"}
+                      </span>
+                    )}
                   </label>
                   <select
                     name="department"
@@ -1415,16 +1508,28 @@ const ManageEmployee = () => {
                       darkMode
                         ? "bg-gray-700 border-gray-600 text-white"
                         : "bg-white border-gray-300"
-                    }`}
+                    } ${formData.role === "departmenthead" && formData.department && checkDepartmentHead(formData.department, formData.role, editingId) ? "border-red-500" : ""}`}
                     required
                   >
                     <option value="">{t.selectDepartment}</option>
-                    {departments.map((d) => (
-                      <option key={d._id} value={d._id}>
-                        {d.name}
-                      </option>
-                    ))}
+                    {departments.map((d) => {
+                      const hasDeptHead = employees.some(emp => 
+                        emp.department?._id === d._id && 
+                        emp.role === "departmenthead" &&
+                        emp._id !== editingId
+                      );
+                      return (
+                        <option key={d._id} value={d._id}>
+                          {d.name} {hasDeptHead && `(${language === "en" ? "Has Dept Head" : "ሃላፊ አለው"})`}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {formData.role === "departmenthead" && formData.department && checkDepartmentHead(formData.department, formData.role, editingId) && (
+                    <p className="text-xs text-red-500 mt-1 flex items-center">
+                      <FaExclamationTriangle className="mr-1" /> {t.departmentHeadExists}
+                    </p>
+                  )}
                 </div>
 
                 <div>

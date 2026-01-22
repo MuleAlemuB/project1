@@ -12,18 +12,6 @@ import Department from "../models/Department.js";
  * @route  POST /api/work-experience
  * @access Employee / DepartmentHead
  */
-/**
- * @desc   Create work experience request
- * @route  POST /api/work-experience
- * @access Employee / DepartmentHead
- */
-/**
- * @desc   Create work experience request
- * @route  POST /api/work-experience
- * @access Employee / DepartmentHead
- */
-// In your work experience controller, update the createWorkExperienceRequest function:
-
 export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   console.log('📥 Request body:', req.body);
   console.log('📁 Request file:', req.file);
@@ -86,20 +74,20 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
   const fullName = populatedRequest.fullName || 
     `${employee.firstName} ${employee.middleName ? employee.middleName + ' ' : ''}${employee.lastName}`.trim();
 
-  // ✅ FIX: Find ONLY ADMINS and Department Heads (NOT the employee themselves)
+  // ✅ FIXED: Find ONLY ADMINS (NOT department heads)
   const admins = await Employee.find({ 
-    role: { $in: ["admin", "departmenthead"] },
+    role: "admin", // Only admins
     _id: { $ne: req.user._id } // Exclude the employee who made the request
   });
   
-  // Create notifications for admins and department heads only
+  // Create notifications for admins only
   const notificationPromises = admins.map(admin =>
     Notification.create({
       type: "Work Experience Request",
       message: `${fullName} has requested a work experience letter`,
       seen: false,
-      user: admin._id, // Send to admin/department head
-      recipientRole: admin.role === "admin" ? "Admin" : "DepartmentHead",
+      user: admin._id, // Send to admin only
+      recipientRole: "Admin",
       relatedId: request._id,
       relatedModel: "WorkExperienceRequest",
       status: "pending",
@@ -121,7 +109,7 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
 
   await Promise.all(notificationPromises);
 
-  // ✅ FIX: Also create a notification for the EMPLOYEE (confirmation only, not the request)
+  // Create a confirmation notification for the EMPLOYEE only
   await Notification.create({
     type: "Work Experience Request",
     message: "Your work experience request has been submitted successfully",
@@ -150,6 +138,7 @@ export const createWorkExperienceRequest = asyncHandler(async (req, res) => {
     data: populatedRequest,
   });
 });
+
 /**
  * @desc   Get all requests (Admin)
  * @route  GET /api/work-experience
@@ -360,41 +349,8 @@ export const updateRequestStatus = asyncHandler(async (req, res) => {
     }
   });
 
-  // Also notify the department head about the status update
-  if (employee && employee.department) {
-    const departmentHead = await Employee.findOne({
-      department: employee.department,
-      role: "departmenthead"
-    });
-
-    if (departmentHead) {
-      await Notification.create({
-        type: notificationType,
-        message: `Work experience request from ${fullName} has been ${status}`,
-        seen: false,
-        employee: {
-          name: fullName,
-          email: employee?.email || "",
-          empId: employee?.empId
-        },
-        recipientRole: "DepartmentHead",
-        relatedId: request._id,
-        relatedModel: "WorkExperienceRequest",
-        status: status,
-        metadata: {
-          employeeName: fullName,
-          employeeEmail: employee?.email || "",
-          employeeEmpId: employee?.empId,
-          department: departmentName,
-          reason: request.reason,
-          status: status,
-          adminReason: adminReason || "",
-          reviewedBy: req.user.name || req.user.email,
-          reviewedAt: new Date()
-        }
-      });
-    }
-  }
+  // ✅ REMOVED: Department head notification for status updates
+  // Only notify the employee, not department heads
 
   res.json({
     success: true,
@@ -447,7 +403,7 @@ export const bulkUpdateRequestStatus = asyncHandler(async (req, res) => {
       notificationMessage = `Your work experience request was ${adminReason ? `rejected: ${adminReason}` : "rejected"}`;
     }
 
-    // Notify requester
+    // Notify requester only
     await Notification.create({
       type: notificationType,
       message: notificationMessage,
@@ -474,41 +430,7 @@ export const bulkUpdateRequestStatus = asyncHandler(async (req, res) => {
       }
     });
 
-    // Also notify the department head about the status update
-    if (employee && employee.department) {
-      const departmentHead = await Employee.findOne({
-        department: employee.department,
-        role: "departmenthead"
-      });
-
-      if (departmentHead) {
-        await Notification.create({
-          type: notificationType,
-          message: `Work experience request from ${fullName} has been ${status}`,
-          seen: false,
-          employee: {
-            name: fullName,
-            email: employee?.email || "",
-            empId: employee?.empId
-          },
-          recipientRole: "DepartmentHead",
-          relatedId: request._id,
-          relatedModel: "WorkExperienceRequest",
-          status: status,
-          metadata: {
-            employeeName: fullName,
-            employeeEmail: employee?.email || "",
-            employeeEmpId: employee?.empId,
-            department: departmentName,
-            reason: request.reason,
-            status: status,
-            adminReason: adminReason || "",
-            reviewedBy: req.user.name || req.user.email,
-            reviewedAt: new Date()
-          }
-        });
-      }
-    }
+    // ✅ REMOVED: Department head notification for bulk status updates
 
     return request;
   });
@@ -808,41 +730,9 @@ export const generateWorkExperienceLetter = asyncHandler(async (req, res) => {
             }
           });
           
-          // Notify department head
-          if (employee && employee.department) {
-            const departmentHead = await Employee.findOne({
-              department: employee.department,
-              role: "departmenthead"
-            });
-            
-            if (departmentHead) {
-              await Notification.create({
-                type: "Work Experience Letter Generated",
-                message: `Work experience letter has been generated for ${fullName}`,
-                seen: false,
-                employee: {
-                  name: fullName,
-                  email: employee?.email || "",
-                  empId: employee?.empId
-                },
-                recipientRole: "DepartmentHead",
-                relatedId: request._id,
-                relatedModel: "WorkExperienceRequest",
-                status: "completed",
-                metadata: {
-                  employeeName: fullName,
-                  employeeEmail: employee?.email || "",
-                  employeeEmpId: employee?.empId,
-                  department: departmentName,
-                  experience: finalExperience,
-                  position: position,
-                  certificateUrl: `/uploads/work-experience-letters/${fileName}`,
-                  generatedDate: new Date()
-                }
-              });
-            }
-          }
-          
+          // ✅ REMOVED: Department head notification for letter generation
+          // Only notify the employee
+
           resolve();
         } catch (error) {
           reject(error);
@@ -940,38 +830,7 @@ export const uploadWorkExperienceLetter = asyncHandler(async (req, res) => {
     }
   });
 
-  // Notify department head
-  if (employee && employee.department) {
-    const departmentHead = await Employee.findOne({
-      department: employee.department,
-      role: "departmenthead"
-    });
-    
-    if (departmentHead) {
-      await Notification.create({
-        type: "Work Experience Letter Uploaded",
-        message: `Work experience letter has been uploaded for ${fullName}`,
-        seen: false,
-        employee: {
-          name: fullName,
-          email: employee?.email || "",
-          empId: employee?.empId
-        },
-        recipientRole: "DepartmentHead",
-        relatedId: request._id,
-        relatedModel: "WorkExperienceRequest",
-        status: "completed",
-        metadata: {
-          employeeName: fullName,
-          employeeEmail: employee?.email || "",
-          employeeEmpId: employee?.empId,
-          department: departmentName,
-          certificateUrl: `/uploads/work-experience-letters/${req.file.filename}`,
-          uploadedDate: new Date()
-        }
-      });
-    }
-  }
+  // ✅ REMOVED: Department head notification for letter upload
 
   // Populate request for response
   const populatedRequest = await WorkExperienceRequest.findById(req.params.id)

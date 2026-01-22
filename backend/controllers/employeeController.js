@@ -106,6 +106,7 @@ export const getEmployeesByDepartment = asyncHandler(async (req, res) => {
 // In your employeeController.js, update the dashboard function:
 
 // -------------------- Employee Dashboard Route --------------------
+// -------------------- Employee Dashboard Route --------------------
 export const getEmployeeDashboard = asyncHandler(async (req, res) => {
   const employee = await Employee.findById(req.user._id).populate("department", "name");
   if (!employee) return res.status(404).json({ message: "Employee not found" });
@@ -120,29 +121,16 @@ export const getEmployeeDashboard = asyncHandler(async (req, res) => {
     });
   }
 
-  // Send every field except password
+  // Send the full employee object with virtual fields included
+  const employeeObject = employee.toObject();
+  
+  // Add the virtual experience field
   const dashboardData = {
-    firstName: employee.firstName,
-    lastName: employee.lastName,
-    email: employee.email,
-    phoneNumber: employee.phoneNumber,
+    ...employeeObject,
+    password: undefined, // Remove password
     department: employee.department?.name || "-",
-    typeOfPosition: employee.typeOfPosition,
-    empId: employee.empId,
-    salary: employee.salary,
-    experience: employee.experience, // This will use the virtual field automatically
-    contactPerson: employee.contactPerson,
-    contactPersonAddress: employee.contactPersonAddress,
-    employeeStatus: employee.employeeStatus,
-    leaveBalance: employee.leaveBalance || 0,
-    requisitionsPending: employee.requisitionsPending || 0,
-    placementStatus: employee.placementStatus || "Not Placed",
-    photo: employee.photo || null,
-    startDate: employee.startDate, // Add this
     joinDate: joinDateDisplay, // This is the formatted display date
-    profileCompleted: Math.round(
-      ((employee.firstName && employee.lastName && employee.email) ? 100 : 50)
-    ),
+    profileCompleted: calculateProfileCompletion(employee),
   };
 
   res.json(dashboardData);
@@ -167,6 +155,9 @@ const calculateProfileCompletion = (employee) => {
   
   return Math.round((completed / total) * 100);
 };
+
+// Helper function for profile completion
+
 // -------------------- Employee Updates Password Only --------------------
 export const updatePassword = asyncHandler(async (req, res) => {
   const employeeId = req.user._id; // coming from authMiddleware's `protect`
@@ -285,4 +276,65 @@ export const migrateExperienceData = asyncHandler(async (req, res) => {
     res.status(500);
     throw new Error('Migration failed: ' + error.message);
   }
+});
+// -------------------- Update Employee Profile (Self) --------------------
+// -------------------- Update Employee Profile (Self) --------------------
+export const updateEmployeeProfile = asyncHandler(async (req, res) => {
+  const employeeId = req.user._id;
+  const data = { ...req.body };
+  
+  console.log("Update request data:", data);
+  
+  // Only allow specific fields to be updated by employee
+  const allowedFields = ['firstName', 'lastName', 'phoneNumber', 'contactPerson', 'contactPersonAddress'];
+  const updateData = {};
+  
+  allowedFields.forEach(field => {
+    if (data[field] !== undefined) {
+      updateData[field] = data[field];
+    }
+  });
+  
+  // Check if there's any data to update
+  if (Object.keys(updateData).length === 0) {
+    res.status(400);
+    throw new Error("No valid fields provided for update");
+  }
+  
+  console.log("Updating with data:", updateData);
+  
+  // Find and update the employee
+  const employee = await Employee.findByIdAndUpdate(
+    employeeId, 
+    updateData, 
+    { new: true, runValidators: true }
+  ).populate("department", "name");
+  
+  if (!employee) {
+    res.status(404);
+    throw new Error("Employee not found");
+  }
+  
+  console.log("Updated employee:", employee);
+  
+  // Format response similar to getEmployeeDashboard
+  let joinDateDisplay = "-";
+  if (employee.startDate) {
+    joinDateDisplay = new Date(employee.startDate).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  }
+  
+  const employeeObject = employee.toObject();
+  const responseData = {
+    ...employeeObject,
+    password: undefined,
+    department: employee.department?.name || "-",
+    joinDate: joinDateDisplay,
+    profileCompleted: calculateProfileCompletion(employee),
+  };
+  
+  res.json(responseData);
 });

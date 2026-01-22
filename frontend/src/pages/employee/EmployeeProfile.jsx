@@ -73,8 +73,14 @@ const EmployeeProfile = () => {
       setIsLoading(true);
       const res = await axiosInstance.get("/employees/dashboard");
       
+      // Log the full response for debugging
+      console.log("Full API Response:", res);
+      console.log("Profile Data:", res.data);
+      
       // Process the profile data to ensure we have proper experience calculation
       const profileData = processProfileData(res.data);
+      
+      console.log("Processed Profile Data:", profileData);
       
       setProfile(profileData);
       setEditedProfile(profileData);
@@ -136,36 +142,91 @@ const EmployeeProfile = () => {
     }));
   }, []);
 
-  // Fix: Handle save profile properly
-  const handleSaveProfile = async () => {
-    try {
-      setSavingProfile(true);
-      
-      // Create an object with only editable fields
-      const updateData = {
-        firstName: editedProfile?.firstName || "",
-        lastName: editedProfile?.lastName || "",
-        phoneNumber: editedProfile?.phoneNumber || "",
-        contactPerson: editedProfile?.contactPerson || "",
-        contactPersonAddress: editedProfile?.contactPersonAddress || ""
-      };
-      
-      const res = await axiosInstance.put("/employees/update-profile", updateData);
-      
-      // Process the updated profile data
-      const updatedProfile = processProfileData(res.data);
-      
-      setProfile(updatedProfile);
-      setEditedProfile(updatedProfile);
-      setIsEditing(false);
-      
-      toast.success(
+  // Fix: Handle save profile properly with immediate state update
+  // Fix: Handle save profile properly with immediate state update
+const handleSaveProfile = async () => {
+  try {
+    setSavingProfile(true);
+    
+    // Validate required fields
+    if (!editedProfile?.firstName?.trim()) {
+      toast.error(
         language === "am" 
-          ? "መገለጫ በተሳካ ሁኔታ ተዘመነ" 
-          : "Profile updated successfully"
+          ? "ስም ያስፈልጋል" 
+          : "First name is required"
       );
-    } catch (error) {
-      console.error("Error updating profile:", error.response?.data || error);
+      return;
+    }
+    
+    if (!editedProfile?.lastName?.trim()) {
+      toast.error(
+        language === "am" 
+          ? "የአባት ስም ያስፈልጋል" 
+          : "Last name is required"
+      );
+      return;
+    }
+    
+    // Create an object with only editable fields
+    const updateData = {
+      firstName: editedProfile.firstName.trim(),
+      lastName: editedProfile.lastName.trim(),
+      phoneNumber: editedProfile?.phoneNumber?.trim() || "",
+      contactPerson: editedProfile?.contactPerson?.trim() || "",
+      contactPersonAddress: editedProfile?.contactPersonAddress?.trim() || ""
+    };
+    
+    console.log("Sending update to /employees/update-profile:", updateData);
+    
+    const res = await axiosInstance.put("/employees/update-profile", updateData);
+    
+    console.log("Update response:", res.data);
+    
+    // IMPORTANT: Process the response data properly
+    const updatedProfile = processProfileData(res.data);
+    
+    console.log("Processed updated profile:", updatedProfile);
+    
+    // Update both profile states
+    setProfile(updatedProfile);
+    setEditedProfile(updatedProfile);
+    
+    setIsEditing(false);
+    
+    toast.success(
+      language === "am" 
+        ? "መገለጫ በተሳካ ሁኔታ ተዘመነ" 
+        : "Profile updated successfully"
+    );
+    
+    // Refresh data after a short delay to ensure consistency
+    setTimeout(() => {
+      fetchProfile();
+    }, 1000);
+    
+  } catch (error) {
+    console.error("Error updating profile:", error.response?.data || error);
+    
+    // Handle specific error cases
+    if (error.response?.status === 400) {
+      toast.error(
+        language === "am" 
+          ? "ልክ ያልሆነ መረጃ፣ እባክዎን ደግመው ይሞክሩ" 
+          : "Invalid data, please try again"
+      );
+    } else if (error.response?.status === 401) {
+      toast.error(
+        language === "am" 
+          ? "ማረጋገጫ አልተሳካም፣ እባክዎ ደግመው ይግቡ" 
+          : "Authentication failed, please login again"
+      );
+    } else if (error.response?.status === 404) {
+      toast.error(
+        language === "am" 
+          ? "መገለጫ አልተገኘም" 
+          : "Profile not found"
+      );
+    } else {
       const errorMessage = error.response?.data?.message || error.message;
       toast.error(
         errorMessage || 
@@ -173,14 +234,24 @@ const EmployeeProfile = () => {
           ? "መገለጫ ማዘመን አልተሳካም" 
           : "Failed to update profile")
       );
-    } finally {
-      setSavingProfile(false);
     }
-  };
+    
+    // Restore original profile data on error
+    setEditedProfile(profile);
+  } finally {
+    setSavingProfile(false);
+  }
+};
 
   const handleCancelEdit = () => {
-    setEditedProfile(profile);
+    setEditedProfile({...profile});
     setIsEditing(false);
+    
+    toast.info(
+      language === "am" 
+        ? "ማስተካከያዎች ተሰርዘዋል" 
+        : "Changes discarded"
+    );
   };
 
   const handlePhotoUploadClick = () => {
@@ -373,8 +444,33 @@ const EmployeeProfile = () => {
     </div>
   ));
 
-  // Render field function
-  const renderField = (fieldName, label, icon, value) => {
+  // FIXED: Helper function to get display value for any field
+  const getDisplayValue = (fieldName) => {
+    const currentData = editedProfile || profile;
+    if (!currentData) return "-";
+    
+    const value = currentData[fieldName];
+    
+    // Handle department object specially
+    if (fieldName === 'department') {
+      if (!value) return "-";
+      if (typeof value === 'object') {
+        return value.name || "-";
+      }
+      return value || "-";
+    }
+    
+    // Handle salary formatting
+    if (fieldName === 'salary' && value) {
+      return `$${Number(value).toLocaleString()}`;
+    }
+    
+    // For all other fields
+    return value || "-";
+  };
+
+  // FIXED: Render field function - Use the helper function
+  const renderField = (fieldName, label, icon, isNonEditableField = false) => {
     const IconComponent = icon;
     
     if (isEditing && isEditable(fieldName)) {
@@ -395,19 +491,22 @@ const EmployeeProfile = () => {
         </div>
       );
     } else {
+      const displayValue = getDisplayValue(fieldName);
+      const isReadOnly = !isEditable(fieldName) || isNonEditableField;
+      
       return (
         <div key={fieldName}>
           <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
             <IconComponent className="text-blue-600 dark:text-blue-400" />
             {label}
-            {!isEditable(fieldName) && (
+            {isReadOnly && (
               <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">
                 ({language === "am" ? "አይስራም" : "Read-only"})
               </span>
             )}
           </label>
-          <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${!isEditable(fieldName) ? disabledInputBg : inputBg}`}>
-            {value || "-"}
+          <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${isReadOnly ? disabledInputBg : inputBg}`}>
+            {displayValue}
           </div>
         </div>
       );
@@ -498,7 +597,9 @@ const EmployeeProfile = () => {
     );
   }
 
-  const photoUrl = profile?.photo ? `${BACKEND_URL}${profile.photo}` : null;
+  // FIXED: Use editedProfile for display when available
+  const currentProfile = editedProfile || profile;
+  const photoUrl = currentProfile?.photo ? `${BACKEND_URL}${currentProfile.photo}` : null;
 
   return (
     <div className="flex min-h-screen">
@@ -602,7 +703,7 @@ const EmployeeProfile = () => {
                     ) : (
                       <div className="relative group">
                         <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-white text-3xl md:text-4xl font-bold shadow-lg">
-                          {profile?.firstName?.charAt(0) || "E"}
+                          {currentProfile?.firstName?.charAt(0) || "E"}
                         </div>
                         {isEditing && (
                           <div 
@@ -635,10 +736,10 @@ const EmployeeProfile = () => {
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                       <div>
                         <h2 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-                          {profile?.firstName} {profile?.lastName}
+                          {getDisplayValue('firstName')} {getDisplayValue('lastName')}
                         </h2>
                         <p className="text-blue-600 dark:text-blue-400 mt-1">
-                          {profile?.typeOfPosition || "Employee"}
+                          {getDisplayValue('typeOfPosition') || "Employee"}
                         </p>
                       </div>
                       
@@ -668,7 +769,7 @@ const EmployeeProfile = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ሰራተኛ መታወቂያ" : "Employee ID"}
                         </p>
-                        <p className="font-semibold text-gray-900 dark:text-white">{profile?.empId || "-"}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{getDisplayValue('empId')}</p>
                       </div>
                       
                       <div className={`${disabledInputBg} rounded-lg px-4 py-2`}>
@@ -676,9 +777,7 @@ const EmployeeProfile = () => {
                           {language === "am" ? "ክፍል" : "Department"}
                         </p>
                         <p className="font-semibold text-gray-900 dark:text-white">
-                          {typeof profile?.department === 'object' 
-                            ? profile.department.name 
-                            : profile?.department || "-"}
+                          {getDisplayValue('department')}
                         </p>
                       </div>
                       
@@ -686,7 +785,7 @@ const EmployeeProfile = () => {
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {language === "am" ? "ሁኔታ" : "Status"}
                         </p>
-                        <p className="font-semibold text-gray-900 dark:text-white">{profile?.employeeStatus || "-"}</p>
+                        <p className="font-semibold text-gray-900 dark:text-white">{getDisplayValue('employeeStatus')}</p>
                       </div>
                     </div>
                   </div>
@@ -700,16 +799,14 @@ const EmployeeProfile = () => {
                     {renderField(
                       'firstName',
                       language === "am" ? "ስም" : "First Name",
-                      FaUser,
-                      profile?.firstName
+                      FaUser
                     )}
 
                     {/* Last Name - Editable */}
                     {renderField(
                       'lastName',
                       language === "am" ? "የአባት ስም" : "Last Name",
-                      FaUser,
-                      profile?.lastName
+                      FaUser
                     )}
 
                     {/* Email - Non-editable */}
@@ -717,15 +814,14 @@ const EmployeeProfile = () => {
                       'email',
                       "Email",
                       FaEnvelope,
-                      profile?.email
+                      true
                     )}
 
                     {/* Phone - Editable */}
                     {renderField(
                       'phoneNumber',
                       language === "am" ? "ስልክ" : "Phone",
-                      FaPhone,
-                      profile?.phoneNumber
+                      FaPhone
                     )}
 
                     {/* Department - Non-editable */}
@@ -733,9 +829,7 @@ const EmployeeProfile = () => {
                       'department',
                       language === "am" ? "የክፍል ስም" : "Department",
                       FaBuilding,
-                      typeof profile?.department === 'object' 
-                        ? profile.department.name 
-                        : profile?.department || "-"
+                      true
                     )}
                   </div>
 
@@ -746,7 +840,7 @@ const EmployeeProfile = () => {
                       'typeOfPosition',
                       language === "am" ? "የስራ አይነት" : "Position",
                       FaBriefcase,
-                      profile?.typeOfPosition
+                      true
                     )}
 
                     {/* Employee ID - Non-editable */}
@@ -754,7 +848,7 @@ const EmployeeProfile = () => {
                       'empId',
                       language === "am" ? "የሰራተኛ መታወቂያ" : "Employee ID",
                       FaIdBadge,
-                      profile?.empId
+                      true
                     )}
 
                     {/* Salary - Non-editable */}
@@ -762,7 +856,7 @@ const EmployeeProfile = () => {
                       'salary',
                       "Salary",
                       FaDollarSign,
-                      profile?.salary ? `$${profile.salary.toLocaleString()}` : "-"
+                      true
                     )}
 
                     {/* Experience - Non-editable */}
@@ -776,9 +870,9 @@ const EmployeeProfile = () => {
                       </label>
                       <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${disabledInputBg}`}>
                         {getExperienceValue()}
-                        {profile?.startDate && (
+                        {currentProfile?.startDate && (
                           <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            {language === "am" ? "ከሚከተለው ቀን ጀምሮ" : "Since"} {new Date(profile.startDate).toLocaleDateString()}
+                            {language === "am" ? "ከሚከተለው ቀን ጀምሮ" : "Since"} {new Date(currentProfile.startDate).toLocaleDateString()}
                           </div>
                         )}
                       </div>
@@ -788,8 +882,7 @@ const EmployeeProfile = () => {
                     {renderField(
                       'contactPerson',
                       language === "am" ? "የእድር ሰው ስም" : "Contact Person",
-                      FaUser,
-                      profile?.contactPerson
+                      FaUser
                     )}
                   </div>
                 </div>
@@ -801,20 +894,16 @@ const EmployeeProfile = () => {
                     {renderField(
                       'contactPersonAddress',
                       language === "am" ? "የእድር ሰው አድራሻ" : "Contact Address",
-                      FaAddressCard,
-                      profile?.contactPersonAddress
+                      FaAddressCard
                     )}
 
                     {/* Status - Display only */}
-                    <div>
-                      <label className="flex items-center gap-2 mb-2 font-semibold text-gray-700 dark:text-gray-300">
-                        <FaBriefcase className="text-blue-600 dark:text-blue-400" />
-                        {language === "am" ? "ሁኔታ" : "Status"}
-                      </label>
-                      <div className={`px-4 py-3 border ${inputBorder} rounded-lg ${disabledInputBg}`}>
-                        {profile?.employeeStatus || "-"}
-                      </div>
-                    </div>
+                    {renderField(
+                      'employeeStatus',
+                      language === "am" ? "ሁኔታ" : "Status",
+                      FaBriefcase,
+                      true
+                    )}
                   </div>
                 </div>
               </div>
@@ -1018,7 +1107,7 @@ const EmployeeProfile = () => {
           </div>
 
           {/* Profile Completion Bar - Only if data exists */}
-          {profile?.profileCompleted !== undefined && (
+          {currentProfile?.profileCompleted !== undefined && (
             <div className={`mt-6 ${cardBg} rounded-xl shadow-lg border ${cardBorder} p-6`}>
               <div className="flex items-center justify-between mb-4">
                 <div>
@@ -1032,21 +1121,21 @@ const EmployeeProfile = () => {
                   </p>
                 </div>
                 <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                  {profile.profileCompleted}%
+                  {currentProfile.profileCompleted}%
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-blue-600 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${profile.profileCompleted}%` }}
+                  style={{ width: `${currentProfile.profileCompleted}%` }}
                 ></div>
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                {profile.profileCompleted === 100 
+                {currentProfile.profileCompleted === 100 
                   ? (language === "am" ? "መገለጫዎ ሙሉ በሙሉ ተሞልቷል! 🎉" : "Your profile is 100% complete! 🎉")
                   : (language === "am" 
-                      ? `${100 - profile.profileCompleted}% ይቀራል ሙሉ ለማድረግ` 
-                      : `${100 - profile.profileCompleted}% remaining to complete`
+                      ? `${100 - currentProfile.profileCompleted}% ይቀራል ሙሉ ለማድረግ` 
+                      : `${100 - currentProfile.profileCompleted}% remaining to complete`
                     )
                 }
               </p>

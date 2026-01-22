@@ -431,33 +431,85 @@ export const markNotificationRead = asyncHandler(async (req, res) => {
 // ================================
 // UPDATE Employee by Department Head
 // ================================
+// ================================
+// UPDATE Employee by Department Head - FIXED VERSION
+// ================================
+// ================================
+// UPDATE Employee by Department Head - DEBUG VERSION
+// ================================
+// ================================
+// UPDATE Employee by Department Head - NO NOTIFICATIONS VERSION
+// ================================
 export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
   const { id } = req.params;
+  
+  console.log("=== UPDATE EMPLOYEE BY DEPT HEAD ===");
+  console.log("Department Head ID:", req.user._id);
+  console.log("Employee ID to update:", id);
+  console.log("Update data:", req.body);
   
   // Get department head's department
   const deptHead = await Employee.findById(req.user._id).populate("department", "_id name");
   
   if (!deptHead.department) {
+    console.log("Dept Head has no department assigned");
     return res.status(400).json({ 
       success: false, 
       message: "Department not assigned" 
     });
   }
   
+  const deptId = deptHead.department._id.toString();
   const deptName = deptHead.department.name;
   
-  // Find employee in the same department
-  const employee = await Employee.findOne({
-    _id: id,
-    "department.name": deptName
+  console.log("Department Head's Department:", {
+    id: deptId,
+    name: deptName,
+    deptHeadDepartment: deptHead.department
   });
   
+  // Find the employee
+  const employee = await Employee.findById(id).populate("department", "_id name");
+  
   if (!employee) {
+    console.log("Employee not found");
     return res.status(404).json({ 
       success: false, 
-      message: "Employee not found in your department" 
+      message: "Employee not found" 
     });
   }
+  
+  console.log("Found employee:", {
+    employeeId: employee._id,
+    firstName: employee.firstName,
+    lastName: employee.lastName,
+    department: employee.department,
+    departmentId: employee.department?._id?.toString(),
+    departmentName: employee.department?.name
+  });
+  
+  // Check if employee is in the same department
+  const employeeDeptId = employee.department?._id?.toString();
+  const employeeDeptName = employee.department?.name;
+  
+  console.log("Department comparison:", {
+    deptHeadDeptId: deptId,
+    employeeDeptId: employeeDeptId,
+    matchId: employeeDeptId === deptId,
+    deptHeadDeptName: deptName,
+    employeeDeptName: employeeDeptName,
+    matchName: employeeDeptName === deptName
+  });
+  
+  if (employeeDeptId !== deptId && employeeDeptName !== deptName) {
+    console.log("DEPARTMENT MISMATCH - Access denied");
+    return res.status(403).json({ 
+      success: false, 
+      message: `You can only update employees in your department. Your department: ${deptName}, Employee's department: ${employeeDeptName || 'Unknown'}` 
+    });
+  }
+  
+  console.log("Department check passed. Proceeding with update...");
   
   // Only allow specific fields to be updated by department head
   const allowedUpdates = {
@@ -476,6 +528,8 @@ export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
     maritalStatus: req.body.maritalStatus,
   };
   
+  console.log("Fields to update:", allowedUpdates);
+  
   // Remove undefined fields
   Object.keys(allowedUpdates).forEach(key => {
     if (allowedUpdates[key] !== undefined) {
@@ -485,20 +539,7 @@ export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
   
   const updatedEmployee = await employee.save();
   
-  // Create notification for the update
-  await Notification.create({
-    type: "Employee Updated",
-    message: `Employee ${updatedEmployee.firstName} ${updatedEmployee.lastName} has been updated by department head`,
-    recipient: updatedEmployee._id,
-    recipientRole: "Employee",
-    sender: req.user._id,
-    senderRole: "departmenthead",
-    metadata: {
-      employeeId: updatedEmployee._id,
-      updatedBy: req.user._id,
-      updatedFields: Object.keys(allowedUpdates).filter(key => allowedUpdates[key] !== undefined)
-    }
-  });
+  console.log("Update successful!");
   
   res.status(200).json({
     success: true,
@@ -508,7 +549,7 @@ export const updateEmployeeByDeptHead = asyncHandler(async (req, res) => {
 });
 
 // ================================
-// DELETE Employee by Department Head
+// DELETE Employee by Department Head - NO NOTIFICATIONS VERSION
 // ================================
 export const deleteEmployeeByDeptHead = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -543,27 +584,16 @@ export const deleteEmployeeByDeptHead = asyncHandler(async (req, res) => {
   employee.status = "Terminated";
   await employee.save();
   
-  // Create notification for the deletion
-  await Notification.create({
-    type: "Employee Terminated",
-    message: `Employee ${employee.firstName} ${employee.lastName} has been terminated by department head`,
-    recipient: employee._id,
-    recipientRole: "Employee",
-    sender: req.user._id,
-    senderRole: "departmenthead",
-    metadata: {
-      employeeId: employee._id,
-      terminatedBy: req.user._id,
-      terminationDate: new Date()
-    }
-  });
-  
   res.status(200).json({
     success: true,
     message: "Employee terminated successfully",
     data: { id: employee._id, status: "Terminated" }
   });
 });
+// ================================
+// DELETE Employee by Department Head
+// ================================
+
 export const updateDeptHeadPhoto = asyncHandler(async (req, res) => {
   try {
     const deptHead = await Employee.findById(req.user._id);
@@ -626,4 +656,104 @@ export const updateDeptHeadPhoto = asyncHandler(async (req, res) => {
       error: error.message 
     });
   }
+});
+// ================================
+// GET Notifications for Specific Department Head
+// ================================
+export const getDeptHeadNotifications = asyncHandler(async (req, res) => {
+  console.log("Fetching notifications for department head:", req.user._id);
+  
+  const notifications = await Notification.find({
+    $or: [
+      { recipient: req.user._id }, // Directly to this department head
+      { 
+        recipientRole: "departmenthead", 
+        "metadata.departmentId": req.user.department // To all department heads of this department
+      }
+    ]
+  })
+  .sort({ createdAt: -1 })
+  .limit(100);
+
+  console.log(`Found ${notifications.length} notifications for department head ${req.user._id}`);
+  
+  res.status(200).json(notifications);
+});
+
+// ================================
+// MARK Notification as Read for Department Head
+// ================================
+export const markDeptHeadNotificationRead = asyncHandler(async (req, res) => {
+  const { notificationId } = req.params;
+
+  console.log("Marking notification as read:", {
+    notificationId,
+    departmentHeadId: req.user._id
+  });
+
+  const notification = await Notification.findOne({
+    _id: notificationId,
+    $or: [
+      { recipient: req.user._id },
+      { 
+        recipientRole: "departmenthead", 
+        "metadata.departmentId": req.user.department 
+      }
+    ]
+  });
+
+  if (!notification) {
+    console.log("Notification not found or not authorized");
+    return res.status(404).json({ 
+      message: "Notification not found or not authorized" 
+    });
+  }
+
+  notification.seen = true;
+  await notification.save();
+
+  console.log("Notification marked as read successfully");
+
+  res.status(200).json({
+    message: "Notification marked as read",
+    notification
+  });
+});
+
+// ================================
+// DELETE Notification for Department Head
+// ================================
+export const deleteDeptHeadNotification = asyncHandler(async (req, res) => {
+  const { notificationId } = req.params;
+
+  console.log("Deleting notification:", {
+    notificationId,
+    departmentHeadId: req.user._id
+  });
+
+  const notification = await Notification.findOne({
+    _id: notificationId,
+    $or: [
+      { recipient: req.user._id },
+      { 
+        recipientRole: "departmenthead", 
+        "metadata.departmentId": req.user.department 
+      }
+    ]
+  });
+
+  if (!notification) {
+    console.log("Notification not found or not authorized");
+    return res.status(404).json({ 
+      message: "Notification not found or not authorized" 
+    });
+  }
+
+  await notification.deleteOne();
+
+  console.log("Notification deleted successfully");
+
+  res.status(200).json({
+    message: "Notification deleted successfully"
+  });
 });

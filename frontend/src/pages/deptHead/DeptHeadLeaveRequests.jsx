@@ -174,143 +174,145 @@ const DeptHeadLeaveRequests = () => {
   const [expandedAll, setExpandedAll] = useState(false);
 
   // Fetch all leave requests
-  // In the fetchRequests function of DeptHeadLeaveRequests.jsx
-const fetchRequests = async () => {
-  try {
-    console.log("Fetching leave requests...");
-    setLoading(true);
-    
-    // Use Promise.allSettled to handle individual failures
-    const [inboxResult, myResult] = await Promise.allSettled([
-      axios.get("/leaves/inbox"),
-      axios.get("/leaves/my"),
-    ]);
-
-    console.log("Inbox result:", inboxResult);
-    console.log("My requests result:", myResult);
-
-    // Handle inbox requests
-    if (inboxResult.status === 'fulfilled') {
-      setEmployeeLeaves(inboxResult.value.data || []);
-    } else {
-      console.error("Failed to fetch inbox:", inboxResult.reason);
-      setMessage(`Failed to load employee requests: ${inboxResult.reason.message}`);
-      setEmployeeLeaves([]);
+  const fetchRequests = async () => {
+    try {
+      console.log("Fetching leave requests...");
+      setLoading(true);
+      
+      // Fetch inbox requests (requests from employees to department head)
+      const inboxResponse = await axios.get("/leaves/inbox");
+      setEmployeeLeaves(inboxResponse.data || []);
+      
+      // Fetch my requests (requests I've made)
+      const myResponse = await axios.get("/leaves/my");
+      setMyLeaves(myResponse.data || []);
+      
+      // Also fetch previous requests (decided requests)
+      if (showPreviousRequests) {
+        await fetchPreviousRequests();
+      }
+      
+    } catch (err) {
+      console.error("Error fetching leave requests:", err);
+      setMessage(err.response?.data?.message || t.decisionFailed);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Handle my requests
-    if (myResult.status === 'fulfilled') {
-      setMyLeaves(myResult.value.data || []);
-    } else {
-      console.error("Failed to fetch my requests:", myResult.reason);
-      // Don't show error for my requests if user is not employee
-      setMyLeaves([]);
+  // Fetch previous (decided) leave requests
+  const fetchPreviousRequests = async () => {
+    try {
+      const response = await axios.get("/leaves/previous");
+      setPreviousRequests(response.data || []);
+    } catch (err) {
+      console.error("Error fetching previous requests:", err);
+      // Don't show error for previous requests
     }
+  };
 
-  } catch (err) {
-    console.error("Error in fetchRequests:", err);
-    setMessage(t.decisionFailed);
-    setEmployeeLeaves([]);
-    setMyLeaves([]);
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Also update the useEffect to handle errors better:
-useEffect(() => {
-  if (!authLoading && user) {
-    console.log("User loaded:", user);
-    fetchRequests();
-  } else if (!authLoading && !user) {
-    console.log("No user found");
-    setLoading(false);
-  }
-}, [user, authLoading]);
-
-// In the handleDecision function
-const handleDecision = async (id, status) => {
-  try {
-    console.log(`Updating request ${id} to status: ${status}`);
-    
-    await axios.put(`/leaves/requests/${id}/status`, { status });
-    setMessage(`${t.decisionSuccess} - Request ${status}`);
-    
-    // Wait a bit for database to update
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // IMPORTANT: Refresh BOTH lists
-    await fetchRequests(); // This reloads inbox (pending requests)
-    
-    if (showPreviousRequests) {
-      // Force refresh previous requests
-      await fetchPreviousRequests();
-    } else {
-      // If previous requests tab is not open, still fetch in background
-      // so it's ready when user opens it
-      fetchPreviousRequests().catch(err => 
-        console.log("Background fetch of previous requests failed:", err)
-      );
+  useEffect(() => {
+    if (!authLoading && user) {
+      console.log("User loaded:", user);
+      fetchRequests();
+    } else if (!authLoading && !user) {
+      console.log("No user found");
+      setLoading(false);
     }
-    
-  } catch (err) {
-    console.error("Error updating status:", err.response?.data || err.message);
-    setMessage(`${t.decisionFailed}: ${err.response?.data?.message || err.message}`);
-  }
-};
+  }, [user, authLoading]);
 
-// In the handleDelete function (for pending requests)
-const handleDelete = async (id) => {
-  if (!window.confirm(t.deleteConfirm)) return;
-  try {
-    await axios.delete(`/leaves/requests/${id}`); // This should work now
-    setMessage(t.deleteSuccess);
-    fetchRequests();
-    if (showPreviousRequests) {
+  // Handle approve/reject decision
+  const handleDecision = async (id, status) => {
+    try {
+      console.log(`Updating request ${id} to status: ${status}`);
+      
+      await axios.put(`/leaves/requests/${id}/status`, { status });
+      setMessage(`${t.decisionSuccess} - Request ${status}`);
+      
+      // Refresh data
+      await fetchRequests();
+      
+    } catch (err) {
+      console.error("Error updating status:", err.response?.data || err.message);
+      setMessage(`${t.decisionFailed}: ${err.response?.data?.message || err.message}`);
+    }
+  };
+
+  // Handle delete for pending requests
+  const handleDelete = async (id) => {
+    if (!window.confirm(t.deleteConfirm)) return;
+    try {
+      await axios.delete(`/leaves/requests/${id}`);
+      setMessage(t.deleteSuccess);
+      fetchRequests();
+    } catch (err) {
+      console.error("Error deleting request:", err.response?.data || err.message);
+      setMessage(t.deleteFailed);
+    }
+  };
+
+  // Handle delete for previous requests
+  const handleDeletePrevious = async (id) => {
+    if (!window.confirm(t.deleteConfirm)) return;
+    try {
+      await axios.delete(`/leaves/requests/${id}`);
+      setMessage(t.deleteSuccess);
       fetchPreviousRequests();
+    } catch (err) {
+      console.error("Error deleting previous request:", err.response?.data || err.message);
+      setMessage(t.deleteFailed);
     }
-  } catch (err) {
-    console.error("Error deleting request:", err.response?.data || err.message);
-    setMessage(t.deleteFailed);
-  }
-};
+  };
 
-// In the handleDeletePrevious function
-const handleDeletePrevious = async (id) => {
-  if (!window.confirm(t.deleteConfirm)) return;
-  try {
-    await axios.delete(`/leaves/requests/${id}`); // Same endpoint
-    setMessage(t.deleteSuccess);
-    fetchPreviousRequests();
-  } catch (err) {
-    console.error("Error deleting previous request:", err.response?.data || err.message);
-    setMessage(t.deleteFailed);
-  }
-};
-  // Apply new leave
+  // Apply new leave - FIXED ENDPOINT
   const handleApplySubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate dates
+    if (!startDate || !endDate) {
+      setMessage(t.leaveFailed + ": Please select both start and end dates");
+      return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+      setMessage(t.leaveFailed + ": End date must be after start date");
+      return;
+    }
+    
     const formData = new FormData();
     formData.append("startDate", startDate);
     formData.append("endDate", endDate);
     formData.append("reason", reason);
-    attachments.forEach((f) => formData.append("attachments", f));
+    
+    // Add attachments if any
+    if (attachments && attachments.length > 0) {
+      attachments.forEach((file) => {
+        formData.append("attachments", file);
+      });
+    }
 
     try {
-      await axios.post("/leaves/request", formData, { // Fixed endpoint
-        headers: { "Content-Type": "multipart/form-data" },
+      // FIXED: Changed endpoint from "/leaves/request" to "/leaves"
+      await axios.post("leaves/requests", formData, {
+        headers: { 
+          "Content-Type": "multipart/form-data",
+        },
       });
+      
       setMessage(t.leaveSubmitted);
       setShowApplyForm(false);
       setStartDate("");
       setEndDate("");
       setReason("");
       setAttachments([]);
-      fetchRequests();
+      
+      // Refresh data
+      await fetchRequests();
       setActiveTab("myLeave");
+      
     } catch (err) {
-      console.error(err);
-      setMessage(t.leaveFailed);
+      console.error("Error submitting leave request:", err.response?.data || err);
+      setMessage(`${t.leaveFailed}: ${err.response?.data?.message || err.message}`);
     }
   };
 
@@ -319,10 +321,14 @@ const handleDeletePrevious = async (id) => {
     setDetailsOpen({});
   };
 
-  const handleTogglePreviousRequests = () => {
-    setShowPreviousRequests((prev) => !prev);
-    if (!showPreviousRequests) {
+  const handleTogglePreviousRequests = async () => {
+    const newShowState = !showPreviousRequests;
+    setShowPreviousRequests(newShowState);
+    
+    if (newShowState) {
+      // If we're showing previous requests, fetch them
       setExpandedAll(false);
+      await fetchPreviousRequests();
     }
   };
 
@@ -409,8 +415,11 @@ const handleDeletePrevious = async (id) => {
 
       {/* Message Alert */}
       {message && (
-        <div className={`mb-6 p-4 rounded-lg ${message.includes("success") ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"}`}>
-          {message}
+        <div className={`mb-6 p-4 rounded-lg flex justify-between items-center ${message.includes("success") ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400"}`}>
+          <span>{message}</span>
+          <button onClick={() => setMessage("")} className="ml-4">
+            <FaTimes />
+          </button>
         </div>
       )}
 

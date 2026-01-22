@@ -14,7 +14,10 @@ import {
   markNotificationRead,
   updateEmployeeByDeptHead,
   deleteEmployeeByDeptHead,
-  updateDeptHeadPhoto  // Added here
+  updateDeptHeadPhoto,
+  getDeptHeadNotifications,
+  markDeptHeadNotificationRead,
+  deleteDeptHeadNotification // Added here
 } from "../controllers/deptHeadController.js"; 
 import { protect, authorize } from "../middlewares/authMiddleware.js";
 
@@ -74,5 +77,8 @@ router.put("/leaves/:leaveId/status", updateLeaveStatus);
 // ================================
 router.get("/notifications", getDeptNotifications);
 router.put("/notifications/:notificationId/read", markNotificationRead);
+router.get("/notifications", getDeptHeadNotifications);
+router.put("/notifications/:notificationId/read", markDeptHeadNotificationRead);
+router.delete("/notifications/:notificationId", deleteDeptHeadNotification);
 
 export default router;

@@ -38,7 +38,6 @@ const LoginPage = () => {
       university: "Debre Tabor University | Human Resource Management System",
       failed: "Login failed. Please check your credentials.",
       backHome: "Back to Home",
-      forgotPassword: "Forgot Password?",
       rememberMe: "Remember me",
     },
     am: {
@@ -52,7 +51,6 @@ const LoginPage = () => {
       university: "ደብረ ታቦር ዩኒቨርሲቲ | የሰው ኃይል አስተዳደር ስርዓት",
       failed: "መግቢያ አልተሳካም። መለያ መረጃዎትን ያረጋግጡ።",
       backHome: "ወደ መነሻ ገጽ",
-      forgotPassword: "የይለፍ ቃል ረሳችሁ?",
       rememberMe: "አስታውሰኝ",
     },
   };
@@ -291,21 +289,6 @@ const LoginPage = () => {
                 </svg>
               </div>
             </div>
-          </div>
-
-          {/* Forgot Password Link */}
-          <div className="mb-6 text-right">
-            <button
-              type="button"
-              onClick={() => navigate("/forgot-password")}
-              className={`text-sm font-medium transition-colors duration-200 ${
-                darkMode
-                  ? "text-indigo-400 hover:text-indigo-300"
-                  : "text-indigo-600 hover:text-indigo-700"
-              }`}
-            >
-              {t.forgotPassword}
-            </button>
           </div>
 
           {/* Submit Button */}

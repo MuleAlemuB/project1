@@ -9,7 +9,7 @@ const workExperienceRequestSchema = new mongoose.Schema(
     },
     requesterRole: {
       type: String,
-      enum: ["employee", "dept_head", "admin"],
+      enum: ["employee", "departmenthead", "admin"],
       required: true,
       default: "employee"
     },

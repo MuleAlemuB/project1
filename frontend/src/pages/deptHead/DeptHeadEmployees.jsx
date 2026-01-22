@@ -166,21 +166,39 @@ const DeptHeadEmployees = () => {
 
     const fetchEmployees = async () => {
       try {
+        console.log("Fetching employees for department:", user.department);
+        
         const res = await axiosInstance.get(
           `/employees/department?department=${encodeURIComponent(user.department)}`
         );
 
-        const employeesWithDetails = res.data.map((emp) => ({
-          ...emp,
-          departmentName: emp.department?.name || "N/A",
-          phoneNumber: emp.phoneNumber || "N/A",
-          photo: emp.photo
-            ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
-            : '/fallback-avatar.png'
-        }));
+        console.log("Fetched employees:", res.data);
+        
+        const employeesWithDetails = res.data.map((emp) => {
+          console.log("Employee data:", {
+            id: emp._id,
+            name: `${emp.firstName} ${emp.lastName}`,
+            department: emp.department,
+            departmentId: emp.department?._id || emp.department,
+            departmentName: emp.department?.name
+          });
+          
+          return {
+            ...emp,
+            // Ensure we store both department ID and department object
+            departmentId: emp.department?._id || emp.department || user.department,
+            departmentName: emp.department?.name || "N/A",
+            phoneNumber: emp.phoneNumber || emp.phone || "N/A",
+            photo: emp.photo
+              ? `${BACKEND_URL}${emp.photo.startsWith('/') ? '' : '/'}${emp.photo}`
+              : '/fallback-avatar.png'
+          };
+        });
+        
         setEmployees(employeesWithDetails);
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching employees:", err);
+        console.error("Error details:", err.response?.data);
       } finally {
         setLoading(false);
       }
@@ -203,44 +221,43 @@ const DeptHeadEmployees = () => {
   };
 
   const handleSave = async () => {
-  if (!selectedEmployee) return;
-  
-  setIsSaving(true);
-  try {
-    // Debug: Log current user and selected employee info
-    console.log("Current user (dept head):", user);
-    console.log("Selected employee:", selectedEmployee);
-    console.log("Department head's department ID:", user.department);
-    console.log("Employee's department:", selectedEmployee.department);
+    if (!selectedEmployee) return;
     
-    // Create data with only allowed fields for department head
-    const allowedFields = {
-      firstName: editData.firstName,
-      middleName: editData.middleName,
-      lastName: editData.lastName,
-      phoneNumber: editData.phoneNumber,
-      sex: editData.sex,
-      typeOfPosition: editData.typeOfPosition,
-      termOfEmployment: editData.termOfEmployment,
-      contactPerson: editData.contactPerson,
-      contactPersonAddress: editData.contactPersonAddress,
-      employeeStatus: editData.employeeStatus,
-      dateOfBirth: editData.dateOfBirth,
-      address: editData.address,
-      maritalStatus: editData.maritalStatus,
-    };
-    
-    console.log("Updating employee ID:", selectedEmployee._id);
-    console.log("Update data:", allowedFields);
-    
-    // OPTION 1: Try department-specific update endpoint
+    setIsSaving(true);
     try {
+      console.log("=== STARTING EMPLOYEE UPDATE ===");
+      console.log("Selected Employee ID:", selectedEmployee._id);
+      console.log("User Department ID:", user.department);
+      console.log("Employee Department ID from state:", selectedEmployee.departmentId);
+      
+      // Create data with only allowed fields for department head
+      const allowedFields = {
+        firstName: editData.firstName,
+        middleName: editData.middleName,
+        lastName: editData.lastName,
+        phoneNumber: editData.phoneNumber,
+        sex: editData.sex,
+        typeOfPosition: editData.typeOfPosition,
+        termOfEmployment: editData.termOfEmployment,
+        contactPerson: editData.contactPerson,
+        contactPersonAddress: editData.contactPersonAddress,
+        employeeStatus: editData.employeeStatus,
+        dateOfBirth: editData.dateOfBirth,
+        address: editData.address,
+        maritalStatus: editData.maritalStatus,
+      };
+      
+      console.log("Update payload:", allowedFields);
+      
+      // FIXED: Use correct endpoint - /depthead/employees/:id (plural)
       const response = await axiosInstance.put(
-        `/depthead/employee/${selectedEmployee._id}`,
+        `/depthead/employees/${selectedEmployee._id}`,
         allowedFields
       );
       
-      if (response.data.success || response.data._id) {
+      console.log("Update response:", response.data);
+      
+      if (response.data.success) {
         // Update local state
         setEmployees(prev => prev.map(emp => 
           emp._id === selectedEmployee._id 
@@ -252,95 +269,73 @@ const DeptHeadEmployees = () => {
         closeModal();
         return;
       }
-    } catch (deptError) {
-      console.log("Department endpoint failed:", {
-        status: deptError.response?.status,
-        message: deptError.response?.data?.message,
-        data: deptError.response?.data
+      
+      throw new Error(t.updateFailed);
+      
+    } catch (err) {
+      console.error("Update error:", err);
+      console.error("Error details:", {
+        status: err.response?.status,
+        statusText: err.response?.statusText,
+        data: err.response?.data,
+        url: err.config?.url,
+        method: err.config?.method
       });
       
-      // Check if it's a department mismatch error
-      if (deptError.response?.data?.message?.includes("department")) {
-        // Show specific department error
-        alert(`Error: ${deptError.response.data.message}\n\nYour department: ${user.department}\nEmployee's department: ${selectedEmployee.department}`);
-        setIsSaving(false);
-        return;
+      // Show user-friendly error message
+      let errorMessage = t.updateFailed;
+      
+      if (err.response?.status === 403) {
+        errorMessage = t.updateRestricted;
+      } else if (err.response?.status === 404) {
+        errorMessage = "Endpoint not found. Please check the API route.";
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message;
+      } else if (err.message) {
+        errorMessage = err.message;
       }
       
-      // OPTION 2: Try standard employee update with limited fields
-      const limitedFields = {
-        firstName: editData.firstName,
-        lastName: editData.lastName,
-        phoneNumber: editData.phoneNumber,
-        employeeStatus: editData.employeeStatus,
-        typeOfPosition: editData.typeOfPosition,
-      };
+      alert(`${language === "en" ? "Error" : "ስህተት"}: ${errorMessage}`);
       
-      const response = await axiosInstance.put(
-        `/employees/${selectedEmployee._id}`,
-        limitedFields
-      );
-      
-      if (response.data.success || response.data._id) {
-        // Update local state
-        setEmployees(prev => prev.map(emp => 
-          emp._id === selectedEmployee._id 
-            ? { ...emp, ...limitedFields } 
-            : emp
-        ));
-        
-        alert(t.updateSuccess);
-        closeModal();
-        return;
-      }
+    } finally {
+      setIsSaving(false);
     }
-    
-    throw new Error(t.updateFailed);
-    
-  } catch (err) {
-    console.error("Update error details:", {
-      status: err.response?.status,
-      statusText: err.response?.statusText,
-      data: err.response?.data,
-      message: err.message
-    });
-    
-    // Show user-friendly error message
-    let errorMessage = t.updateFailed;
-    if (err.response?.status === 403) {
-      errorMessage = t.updateRestricted;
-    } else if (err.response?.data?.message) {
-      errorMessage = err.response.data.message;
-    } else if (err.message) {
-      errorMessage = err.message;
-    }
-    
-    alert(`${language === "en" ? "Error" : "ስህተት"}: ${errorMessage}`);
-  } finally {
-    setIsSaving(false);
-  }
-};
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm(t.deleteConfirm)) return;
 
     try {
-      // Try department head delete endpoint first
-      try {
-        await axiosInstance.delete(`/depthead/employee/${id}`);
-      } catch (deptError) {
-        // Fallback to standard endpoint
-        await axiosInstance.delete(`/employees/${id}`);
-      }
+      console.log("Deleting employee:", id);
+      
+      // FIXED: Use correct endpoint - /depthead/employees/:id (plural)
+      await axiosInstance.delete(`/depthead/employees/${id}`);
       
       setEmployees(employees.filter((emp) => emp._id !== id));
       alert(t.deleteSuccess);
     } catch (err) {
       console.error("Delete error:", err);
-      alert(err.response?.data?.message || t.deleteFailed);
+      console.error("Delete error details:", err.response?.data);
+      
+      // Try fallback to standard endpoint if department head endpoint fails
+      try {
+        await axiosInstance.delete(`/employees/${id}`);
+        setEmployees(employees.filter((emp) => emp._id !== id));
+        alert(t.deleteSuccess);
+      } catch (fallbackErr) {
+        alert(err.response?.data?.message || t.deleteFailed);
+      }
     }
   };
 
   const openModal = (emp, edit = false) => {
+    console.log("Opening modal for employee:", {
+      id: emp._id,
+      name: `${emp.firstName} ${emp.lastName}`,
+      departmentId: emp.departmentId,
+      departmentName: emp.departmentName
+    });
+    
     setSelectedEmployee(emp);
     setIsEditing(edit);
     setEditData({
@@ -362,7 +357,7 @@ const DeptHeadEmployees = () => {
       dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : "",
       address: emp.address || "",
       maritalStatus: emp.maritalStatus || "",
-      department: emp.department || "",
+      department: emp.departmentId || emp.department || "",
     });
   };
 
@@ -389,20 +384,20 @@ const DeptHeadEmployees = () => {
     try {
       console.log("Testing available endpoints...");
       
-      // Check standard employee endpoint
-      try {
-        const testRes = await axiosInstance.get(`/employees`);
-        console.log("Employees endpoint exists, count:", testRes.data.length || testRes.data.count);
-      } catch (error) {
-        console.log("Employees endpoint error:", error.response?.status);
-      }
-      
       // Check department head endpoints
       try {
         const testRes = await axiosInstance.get(`/depthead/profile`);
-        console.log("Depthead profile endpoint exists");
+        console.log("Depthead profile endpoint exists:", testRes.data);
       } catch (error) {
         console.log("Depthead profile endpoint error:", error.response?.status);
+      }
+      
+      // Check employees endpoint
+      try {
+        const testRes = await axiosInstance.get(`/depthead/employees`);
+        console.log("Depthead employees endpoint exists, count:", testRes.data.length);
+      } catch (error) {
+        console.log("Depthead employees endpoint error:", error.response?.status);
       }
       
     } catch (error) {
@@ -456,6 +451,14 @@ const DeptHeadEmployees = () => {
         <p className="text-gray-600 dark:text-gray-400">
           {employees.length} {language === "en" ? "employees in your department" : "ሰራተኞች በክፍልዎ ውስጥ"}
         </p>
+        
+        {/* Debug button - remove in production */}
+        <button 
+          onClick={testEndpoints}
+          className="mb-4 px-4 py-2 bg-gray-200 dark:bg-gray-700 rounded text-sm"
+        >
+          Test Endpoints
+        </button>
       </div>
 
       {/* Search */}
@@ -598,6 +601,9 @@ const DeptHeadEmployees = () => {
                   </h2>
                   <p className="text-gray-500 dark:text-gray-400 text-sm">
                     {selectedEmployee.empId}
+                  </p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">
+                    Department: {selectedEmployee.departmentName}
                   </p>
                 </div>
                 <button

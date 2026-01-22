@@ -6,7 +6,7 @@ import Requisition from "../models/Requisition.js";
 import JobApplication from "../models/JobApplication.js";
 import Employee from "../models/Employee.js";
 import Vacancy from "../models/Vacancy.js";
-import Department from "../models/Department.js"; // Import Department model
+import Department from "../models/Department.js";
 import mongoose from "mongoose";
 
 // ---------------- Get all notifications (Admin only) ----------------
@@ -19,7 +19,7 @@ export const getAllNotifications = asyncHandler(async (req, res) => {
 
   const notifications = await Notification.find({ recipientRole: { $regex: /^admin$/i } })
     .sort({ createdAt: -1 })
-    .lean(); // Removed populate to avoid schema issues
+    .lean();
 
   res.json(notifications);
 });
@@ -29,12 +29,10 @@ const getDepartmentName = async (departmentId) => {
   try {
     if (!departmentId) return "N/A";
     
-    // If it's already a string (department name), return it
     if (typeof departmentId === 'string' && !mongoose.Types.ObjectId.isValid(departmentId)) {
       return departmentId;
     }
     
-    // If it's an ObjectId, find the department
     if (mongoose.Types.ObjectId.isValid(departmentId)) {
       const department = await Department.findById(departmentId).select('name').lean();
       return department?.name || "N/A";
@@ -47,12 +45,23 @@ const getDepartmentName = async (departmentId) => {
   }
 };
 
+// Helper to get current department head's department
+const getCurrentDeptHeadDepartment = async (userId) => {
+  try {
+    const employee = await Employee.findById(userId).select('department').lean();
+    return employee?.department;
+  } catch (error) {
+    console.error('Error fetching employee department:', error.message);
+    return null;
+  }
+};
+
 // ---------------- Get notifications for logged-in user ----------------
 export const getMyNotifications = asyncHandler(async (req, res) => {
   const user = req.user;
   const role = user.role.toLowerCase();
-  const userId = user._id; // Get user ID
-  const userEmail = user.email?.toLowerCase(); // Get user email
+  const userId = user._id;
+  const userEmail = user.email?.toLowerCase();
 
   let notifications;
 
@@ -61,7 +70,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
     
-    // Process each notification to add detailed information
     const enhancedNotifications = await Promise.all(
       notifications.map(async (notif) => {
         let enhancedNotif = { ...notif };
@@ -69,23 +77,12 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
         try {
           switch (notif.type) {
             case "Vacancy Application":
-              // For JobApplication schema
               const jobApplication = await JobApplication.findById(notif.reference)
                 .populate('vacancyId', 'title department position')
                 .populate('employeeId', 'name email phoneNumber')
                 .lean();
               
               if (jobApplication) {
-                enhancedNotif.applicant = {
-                  name: jobApplication.employeeId?.name,
-                  email: jobApplication.employeeId?.email,
-                  phone: jobApplication.employeeId?.phoneNumber,
-                  appliedAt: jobApplication.appliedAt,
-                  resume: jobApplication.resume
-                };
-                enhancedNotif.vacancy = jobApplication.vacancyId;
-                
-                // Get department name
                 const departmentName = await getDepartmentName(jobApplication.vacancyId?.department);
                 
                 enhancedNotif.metadata = {
@@ -99,17 +96,14 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                   appliedAt: jobApplication.appliedAt
                 };
               } else if (notif.metadata) {
-                // Use existing metadata if available
                 enhancedNotif.metadata = notif.metadata;
               }
               break;
 
             case "Leave":
-              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference)
-                .lean();
+              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
               
               if (leave) {
-                // Try to get employee details if requester is an ObjectId
                 let employeeName = leave.requesterName;
                 let employeeEmail = leave.requesterEmail;
                 let employeePhone = null;
@@ -131,10 +125,8 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                   }
                 }
                 
-                // Get department name
                 const departmentName = await getDepartmentName(leave.department);
                 
-                enhancedNotif.leaveRequestId = leave;
                 enhancedNotif.metadata = {
                   employeeName: employeeName,
                   department: departmentName,
@@ -158,7 +150,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               const requisition = await Requisition.findById(notif.reference).lean();
               
               if (requisition) {
-                // Get requester details
                 let requesterName = requisition.requestedBy;
                 let requesterEmail = requisition.requestedByEmail;
                 let requesterDepartment = requisition.department;
@@ -180,10 +171,8 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                   }
                 }
                 
-                // Get department name
                 const departmentName = await getDepartmentName(requesterDepartment);
                 
-                // Check if requisition has additional fields (from updated schema)
                 const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
                 const justification = requisition.justification || requisition.reason || "N/A";
                 const priority = requisition.priority || "medium";
@@ -210,9 +199,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
 
             case "Work Experience":
-              // Handle Work Experience requests
-              // You'll need to import and use the WorkExperienceRequest model
-              // For now, we'll just pass the existing metadata
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
@@ -220,7 +206,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
           }
         } catch (error) {
           console.error(`Error enhancing notification ${notif._id}:`, error.message);
-          // Keep original notification if error occurs
           if (notif.metadata) {
             enhancedNotif.metadata = notif.metadata;
           }
@@ -232,23 +217,57 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
     res.json(enhancedNotifications);
   } else if (role === "departmenthead") {
-    notifications = await Notification.find({ recipientRole: "DepartmentHead" })
-      .sort({ createdAt: -1 })
-      .lean(); // Changed from populate to lean
+    // Get current department head's department
+    const userDepartment = await getCurrentDeptHeadDepartment(userId);
     
-    // Process each notification to add detailed information for department head
+    // FIXED: Filter notifications by department AND recipientId
+    notifications = await Notification.find({
+      $or: [
+        // Notifications for this specific department head (by ID)
+        { recipientId: userId },
+        // Notifications for department heads in user's department
+        { 
+          recipientRole: "DepartmentHead",
+          department: userDepartment 
+        },
+        // Legacy notifications for department heads without department info
+        {
+          recipientRole: "DepartmentHead",
+          department: { $exists: false }
+        }
+      ]
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+    
+    // FIXED: Filter out notifications that were meant for previous department heads
+    // Only include notifications that were created after the current department head was assigned
+    // OR notifications that are specifically for this user by ID
+    const filteredNotifications = notifications.filter(notif => {
+      // If notification has recipientId, check if it's for this user
+      if (notif.recipientId) {
+        return notif.recipientId.toString() === userId.toString();
+      }
+      
+      // If notification doesn't have recipientId but has department, check if it's for user's department
+      if (notif.department) {
+        return notif.department.toString() === userDepartment?.toString();
+      }
+      
+      // Legacy notifications without department or recipientId
+      return true;
+    });
+    
     const enhancedNotifications = await Promise.all(
-      notifications.map(async (notif) => {
+      filteredNotifications.map(async (notif) => {
         let enhancedNotif = { ...notif };
         
         try {
           switch (notif.type) {
             case "Leave":
-              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference)
-                .lean();
+              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
               
               if (leave) {
-                // Try to get employee details if requester is an ObjectId
                 let employeeName = leave.requesterName;
                 let employeeEmail = leave.requesterEmail;
                 let employeePhone = null;
@@ -270,10 +289,8 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                   }
                 }
                 
-                // Get department name
                 const departmentName = await getDepartmentName(leave.department);
                 
-                enhancedNotif.leaveRequestId = leave;
                 enhancedNotif.metadata = {
                   employeeName: employeeName,
                   department: departmentName,
@@ -297,7 +314,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               const requisition = await Requisition.findById(notif.reference).lean();
               
               if (requisition) {
-                // Get requester details
                 let requesterName = requisition.requestedBy;
                 let requesterEmail = requisition.requestedByEmail;
                 let requesterDepartment = requisition.department;
@@ -319,10 +335,8 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
                   }
                 }
                 
-                // Get department name
                 const departmentName = await getDepartmentName(requesterDepartment);
                 
-                // Check if requisition has additional fields (from updated schema)
                 const hasAttachments = requisition.attachments && Array.isArray(requisition.attachments) && requisition.attachments.length > 0;
                 const justification = requisition.justification || requisition.reason || "N/A";
                 const priority = requisition.priority || "medium";
@@ -349,7 +363,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
 
             default:
-              // For other types, use existing metadata if available
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
@@ -357,7 +370,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
           }
         } catch (error) {
           console.error(`Error enhancing notification ${notif._id}:`, error.message);
-          // Keep original notification if error occurs
           if (notif.metadata) {
             enhancedNotif.metadata = notif.metadata;
           }
@@ -369,21 +381,24 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
     res.json(enhancedNotifications);
   } else if (role === "employee") {
-    // FIXED: Simplified query for employee notifications
     notifications = await Notification.find({
       $or: [
-        // General employee notifications
-        { recipientRole: "Employee" },
-        // Notifications specifically for this employee
         { recipientId: userId },
         { "employee._id": userId },
-        { "employee.email": userEmail }
+        { "employee.email": userEmail },
+        { 
+          recipientRole: "Employee",
+          $and: [
+            { recipientId: { $exists: false } },
+            { "employee._id": { $exists: false } },
+            { "employee.email": { $exists: false } }
+          ]
+        }
       ]
     })
       .sort({ createdAt: -1 })
       .lean();
     
-    // Process each notification
     const enhancedNotifications = await Promise.all(
       notifications.map(async (notif) => {
         let enhancedNotif = { ...notif };
@@ -391,33 +406,31 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
         try {
           switch (notif.type) {
             case "Leave":
-  const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
-  
-  if (leave) {
-    // Get department name (it's already stored as a string)
-    const departmentName = leave.department;
-    
-    enhancedNotif.leaveRequestId = leave;
-    enhancedNotif.metadata = {
-      employeeName: leave.requesterName,
-      department: departmentName,
-      email: leave.requesterEmail,
-      phone: leave.phoneNumber || null, // Add phoneNumber field to schema if needed
-      empId: leave.empId || null, // Add empId field to schema if needed
-      startDate: leave.startDate,
-      endDate: leave.endDate,
-      reason: leave.reason,
-      attachments: leave.attachments || [],
-      requesterRole: leave.requesterRole,
-      targetRole: leave.targetRole,
-      leaveType: leave.leaveType
-    };
-  } else if (notif.metadata) {
-    enhancedNotif.metadata = notif.metadata;
-  }
-  break;
+              const leave = await LeaveRequest.findById(notif.leaveRequestId || notif.reference).lean();
+              
+              if (leave) {
+                const departmentName = leave.department;
+                
+                enhancedNotif.metadata = {
+                  employeeName: leave.requesterName,
+                  department: departmentName,
+                  email: leave.requesterEmail,
+                  phone: leave.phoneNumber || null,
+                  empId: leave.empId || null,
+                  startDate: leave.startDate,
+                  endDate: leave.endDate,
+                  reason: leave.reason,
+                  attachments: leave.attachments || [],
+                  requesterRole: leave.requesterRole,
+                  targetRole: leave.targetRole,
+                  leaveType: leave.leaveType
+                };
+              } else if (notif.metadata) {
+                enhancedNotif.metadata = notif.metadata;
+              }
+              break;
+              
             case "Work Experience":
-              // Handle work experience notifications
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               } else {
@@ -429,7 +442,6 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
               break;
 
             case "Requisition":
-              // Employees usually only get status updates for requisitions
               if (notif.metadata) {
                 enhancedNotif.metadata = notif.metadata;
               }
@@ -452,9 +464,7 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
       })
     );
 
-    // Filter out notifications that are clearly not for this employee
     const filteredNotifications = enhancedNotifications.filter(notif => {
-      // If notification has a specific employee, check if it's for current user
       if (notif.employee?._id || notif.employee?.email) {
         return (
           notif.employee?._id?.toString() === userId.toString() ||
@@ -462,12 +472,10 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
         );
       }
       
-      // If notification has recipientId, check if it's for current user
       if (notif.recipientId) {
         return notif.recipientId.toString() === userId.toString();
       }
       
-      // Otherwise, it's a general employee notification
       return notif.recipientRole === "Employee";
     });
     
@@ -479,19 +487,10 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 });
 
 // ---------------- Mark as seen ----------------
-// ---------------- Mark as seen ----------------
-// ---------------- Mark as seen ----------------
 export const markAsSeen = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
   const userId = req.user._id;
-
-  console.log('Marking as seen:', {
-    userId,
-    role,
-    email,
-    notificationId: req.params.id
-  });
 
   const notif = await Notification.findById(req.params.id);
   
@@ -500,27 +499,29 @@ export const markAsSeen = asyncHandler(async (req, res) => {
     throw new Error("Notification not found");
   }
 
-  console.log('Found notification:', {
-    recipientRole: notif.recipientRole,
-    recipientId: notif.recipientId,
-    employee: notif.employee
-  });
-
-  // Authorization check
   let isAuthorized = false;
   
   if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
     isAuthorized = true;
-  } else if (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") {
-    isAuthorized = true;
+  } else if (role === "departmenthead") {
+    // FIXED: For department head, check if notification is for their department
+    if (notif.recipientRole?.toLowerCase() === "departmenthead") {
+      const userDepartment = await getCurrentDeptHeadDepartment(userId);
+      
+      if (notif.recipientId && notif.recipientId.toString() === userId.toString()) {
+        isAuthorized = true;
+      } else if (notif.department && notif.department.toString() === userDepartment?.toString()) {
+        isAuthorized = true;
+      } else if (!notif.department && !notif.recipientId) {
+        // Legacy notification
+        isAuthorized = true;
+      }
+    }
   } else if (role === "employee") {
-    // For employees, check if notification is for them
     if (notif.recipientRole?.toLowerCase() === "employee") {
-      // Check if it's a general employee notification
       if (!notif.recipientId && !notif.employee?._id && !notif.employee?.email) {
         isAuthorized = true;
       }
-      // Check if it's specifically for this employee
       else if (
         (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
         (notif.employee?._id && notif.employee._id.toString() === userId.toString()) ||
@@ -531,19 +532,14 @@ export const markAsSeen = asyncHandler(async (req, res) => {
     }
   }
 
-  console.log('Authorization result:', isAuthorized);
-
   if (!isAuthorized) {
     res.status(403);
     throw new Error("Not authorized to mark this notification as seen");
   }
 
-  // Mark as seen
   notif.seen = true;
-  notif.seenAt = new Date(); // Add this field to your Notification schema
+  notif.seenAt = new Date();
   await notif.save();
-
-  console.log('Notification marked as seen:', notif._id);
 
   res.status(200).json({ 
     success: true,
@@ -555,20 +551,37 @@ export const markAsSeen = asyncHandler(async (req, res) => {
     }
   });
 });
+
 // ---------------- Mark all as read ----------------
 export const markAllAsRead = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
-  const userId = req.user._id; // Add user ID
+  const userId = req.user._id;
 
   let query = {};
 
   if (role === "admin") {
     query = { recipientRole: "Admin", seen: false };
   } else if (role === "departmenthead") {
-    query = { recipientRole: "DepartmentHead", seen: false };
+    // FIXED: For department head, only mark notifications for their department
+    const userDepartment = await getCurrentDeptHeadDepartment(userId);
+    
+    query = {
+      $or: [
+        { recipientId: userId, seen: false },
+        { 
+          recipientRole: "DepartmentHead",
+          department: userDepartment,
+          seen: false
+        },
+        {
+          recipientRole: "DepartmentHead",
+          department: { $exists: false },
+          seen: false
+        }
+      ]
+    };
   } else if (role === "employee") {
-    // FIXED: More specific query for employees
     query = {
       $or: [
         { recipientId: userId, seen: false },
@@ -596,16 +609,28 @@ export const markAllAsRead = asyncHandler(async (req, res) => {
 export const clearReadNotifications = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
-  const userId = req.user._id; // Add user ID
+  const userId = req.user._id;
 
   let query = { seen: true };
 
   if (role === "admin") {
     query.recipientRole = "Admin";
   } else if (role === "departmenthead") {
-    query.recipientRole = "DepartmentHead";
+    // FIXED: For department head, only clear notifications for their department
+    const userDepartment = await getCurrentDeptHeadDepartment(userId);
+    
+    query.$or = [
+      { recipientId: userId },
+      { 
+        recipientRole: "DepartmentHead",
+        department: userDepartment
+      },
+      {
+        recipientRole: "DepartmentHead",
+        department: { $exists: false }
+      }
+    ];
   } else if (role === "employee") {
-    // FIXED: More specific query for employees
     query.$or = [
       { recipientId: userId },
       { "employee._id": userId },
@@ -626,7 +651,7 @@ export const clearReadNotifications = asyncHandler(async (req, res) => {
   res.json({ message: "All read notifications cleared" });
 });
 
-// ---------------- Delete notification (role-based access) ----------------
+// ---------------- Delete notification ----------------
 export const deleteNotification = asyncHandler(async (req, res) => {
   const role = req.user.role.toLowerCase();
   const email = req.user.email?.toLowerCase();
@@ -642,10 +667,21 @@ export const deleteNotification = asyncHandler(async (req, res) => {
 
   if (role === "admin" && notif.recipientRole?.toLowerCase() === "admin") {
     canDelete = true;
-  } else if (role === "departmenthead" && notif.recipientRole?.toLowerCase() === "departmenthead") {
-    canDelete = true;
+  } else if (role === "departmenthead") {
+    // FIXED: For department head, only delete notifications for their department
+    if (notif.recipientRole?.toLowerCase() === "departmenthead") {
+      const userDepartment = await getCurrentDeptHeadDepartment(userId);
+      
+      if (notif.recipientId && notif.recipientId.toString() === userId.toString()) {
+        canDelete = true;
+      } else if (notif.department && notif.department.toString() === userDepartment?.toString()) {
+        canDelete = true;
+      } else if (!notif.department && !notif.recipientId) {
+        // Legacy notification
+        canDelete = true;
+      }
+    }
   } else if (role === "employee") {
-    // FIXED: More specific checks for employee
     if (notif.recipientRole?.toLowerCase() === "employee") {
       if (
         (notif.recipientId && notif.recipientId.toString() === userId.toString()) ||
@@ -669,7 +705,7 @@ export const deleteNotification = asyncHandler(async (req, res) => {
 
 // ---------------- Create a new notification ----------------
 export const createNotification = asyncHandler(async (req, res) => {
-  const { message, recipientRole, type, reference, employee, department, vacancy, status, leaveRequestId, metadata } = req.body;
+  const { message, recipientRole, type, reference, employee, department, vacancy, status, leaveRequestId, metadata, recipientId } = req.body;
 
   if (!message || !recipientRole) {
     res.status(400);
@@ -679,14 +715,51 @@ export const createNotification = asyncHandler(async (req, res) => {
   const notification = await Notification.create({
     message,
     recipientRole,
+    recipientId, // NEW: Store specific user ID if available
     type,
     reference,
     employee,
-    department,
+    department, // NEW: Store department for department head notifications
     vacancy,
     leaveRequestId,
     metadata: metadata || {},
     status: status || "pending",
+    seen: false,
+  });
+
+  res.status(201).json(notification);
+});
+
+// Helper function to create department head notifications with proper department info
+export const createDeptHeadNotification = asyncHandler(async (req, res) => {
+  const { message, type, reference, metadata, departmentId } = req.body;
+  
+  if (!message || !type || !departmentId) {
+    res.status(400);
+    throw new Error("Message, type, and departmentId are required");
+  }
+
+  // Find current department head for this department
+  const currentDeptHead = await Employee.findOne({
+    department: departmentId,
+    role: 'depthead',
+    employeeStatus: 'active'
+  }).select('_id name email');
+
+  if (!currentDeptHead) {
+    res.status(404);
+    throw new Error('No active department head found for this department');
+  }
+
+  const notification = await Notification.create({
+    message,
+    recipientRole: "DepartmentHead",
+    recipientId: currentDeptHead._id, // Store specific department head ID
+    type,
+    reference,
+    department: departmentId, // Store department ID
+    metadata: metadata || {},
+    status: "pending",
     seen: false,
   });
 
@@ -805,13 +878,22 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
     throw new Error("Notification not found");
   }
 
-  // FIXED: Check authorization with user ID for employees
   let isAuthorized = false;
   
   if (role === "admin" && notification.recipientRole?.toLowerCase() === "admin") {
     isAuthorized = true;
-  } else if (role === "departmenthead" && notification.recipientRole?.toLowerCase() === "departmenthead") {
-    isAuthorized = true;
+  } else if (role === "departmenthead") {
+    if (notification.recipientRole?.toLowerCase() === "departmenthead") {
+      const userDepartment = await getCurrentDeptHeadDepartment(userId);
+      
+      if (notification.recipientId && notification.recipientId.toString() === userId.toString()) {
+        isAuthorized = true;
+      } else if (notification.department && notification.department.toString() === userDepartment?.toString()) {
+        isAuthorized = true;
+      } else if (!notification.department && !notification.recipientId) {
+        isAuthorized = true;
+      }
+    }
   } else if (role === "employee") {
     if (notification.recipientRole?.toLowerCase() === "employee") {
       if (
@@ -848,13 +930,11 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
         break;
 
       case "Leave":
-        const leave = await LeaveRequest.findById(notification.leaveRequestId || notification.reference)
-          .lean();
+        const leave = await LeaveRequest.findById(notification.leaveRequestId || notification.reference).lean();
         
         if (leave) {
           details.leave = leave;
           
-          // Try to get employee details if available
           if (leave.requester && mongoose.Types.ObjectId.isValid(leave.requester)) {
             const employee = await Employee.findById(leave.requester)
               .select('name email phoneNumber empId address')
@@ -870,7 +950,6 @@ export const getNotificationDetails = asyncHandler(async (req, res) => {
         if (requisition) {
           details.requisition = requisition;
           
-          // Get requester details if available
           if (requisition.requestedById && mongoose.Types.ObjectId.isValid(requisition.requestedById)) {
             const employee = await Employee.findById(requisition.requestedById)
               .select('name email phoneNumber empId position')
@@ -898,9 +977,22 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
   if (role === "admin") {
     matchStage = { recipientRole: "Admin" };
   } else if (role === "departmenthead") {
-    matchStage = { recipientRole: "DepartmentHead" };
+    const userDepartment = await getCurrentDeptHeadDepartment(userId);
+    
+    matchStage = {
+      $or: [
+        { recipientId: userId },
+        { 
+          recipientRole: "DepartmentHead",
+          department: userDepartment
+        },
+        {
+          recipientRole: "DepartmentHead",
+          department: { $exists: false }
+        }
+      ]
+    };
   } else if (role === "employee") {
-    // FIXED: More specific match for employees
     matchStage = {
       $or: [
         { recipientId: userId },
@@ -951,7 +1043,6 @@ export const getNotificationStats = asyncHandler(async (req, res) => {
     byType: []
   };
 
-  // Group by type
   const byTypeObj = {};
   result.byType.forEach(item => {
     byTypeObj[item.type] = (byTypeObj[item.type] || 0) + item.count;

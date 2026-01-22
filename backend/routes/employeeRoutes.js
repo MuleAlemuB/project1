@@ -12,7 +12,8 @@ import {
   deleteEmployee,
   getEmployeesByDepartment,
   getEmployeeDashboard,
-  updatePassword
+  updatePassword,
+  updateEmployeeProfile
 } from "../controllers/employeeController.js";
 
 const router = express.Router();
@@ -24,11 +25,62 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// ==================== EMPLOYEE ROUTES ====================
+
 // -------------------- Password Update --------------------
 router.put("/update-password", protect, updatePassword);
 
 // -------------------- Employee Dashboard (MUST BE ABOVE /:id) --------------------
 router.get("/dashboard", protect, getEmployeeDashboard);
+
+// -------------------- Update Own Profile --------------------
+router.put("/update-profile", protect, updateEmployeeProfile);
+
+// -------------------- Upload Profile Photo --------------------
+router.post(
+  "/upload-photo",
+  protect,
+  upload.single("photo"),
+  asyncHandler(async (req, res) => {
+    if (!req.file) {
+      res.status(400);
+      throw new Error("No photo uploaded");
+    }
+
+    const user = await Employee.findById(req.user._id);
+    if (!user) {
+      res.status(404);
+      throw new Error("User not found");
+    }
+
+    user.photo = `/uploads/photos/${req.file.filename}`;
+    const updatedUser = await user.save();
+    
+    // Format response similar to dashboard
+    const userObject = updatedUser.toObject();
+    let joinDateDisplay = "-";
+    if (updatedUser.startDate) {
+      joinDateDisplay = new Date(updatedUser.startDate).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    
+    const responseData = {
+      ...userObject,
+      password: undefined,
+      department: updatedUser.department?.name || "-",
+      joinDate: joinDateDisplay,
+      profileCompleted: calculateProfileCompletion(updatedUser),
+    };
+
+    res.json({
+      message: "Photo uploaded successfully",
+      ...responseData
+    });
+  })
+);
 
 // -------------------- Get Employees by Department (DeptHead + Admin) --------------------
 router.get(
@@ -38,31 +90,7 @@ router.get(
   getEmployeesByDepartment
 );
 
-// -------------------- Update Own Profile --------------------
-router.put(
-  "/update-profile",
-  protect,
-  upload.single("photo"),
-  asyncHandler(async (req, res) => {
-    const user = await Employee.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    user.firstName = req.body.firstName || user.firstName;
-    user.lastName = req.body.lastName || user.lastName;
-    user.email = req.body.email || user.email;
-    user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
-
-    if (req.file) {
-      user.photo = `/uploads/photos/${req.file.filename}`;
-    }
-
-    const updated = await user.save();
-    const populatedUser = await Employee.findById(updated._id)
-      .populate("department", "name");
-
-    res.json(populatedUser);
-  })
-);
+// ==================== ADMIN ROUTES ====================
 
 // -------------------- Employee CRUD (Admin only) --------------------
 router.get("/", protect, authorize("admin"), getEmployees);
@@ -150,58 +178,25 @@ router.get(
     res.json(employee);
   })
 );
-// -------------------- Update Own Profile --------------------
-router.put(
-  "/update-profile",
-  protect,
-  upload.single("photo"),
-  asyncHandler(async (req, res) => {
-    const user = await Employee.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Only allow updating these specific fields
-    user.firstName = req.body.firstName || user.firstName;
-    user.lastName = req.body.lastName || user.lastName;
-    user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
-    user.contactPerson = req.body.contactPerson || user.contactPerson;
-    user.contactPersonAddress = req.body.contactPersonAddress || user.contactPersonAddress;
-
-    if (req.file) {
-      user.photo = `/uploads/photos/${req.file.filename}`;
+// Helper function for profile completion
+const calculateProfileCompletion = (employee) => {
+  const fields = [
+    'firstName', 'lastName', 'email', 'empId', 'department',
+    'phoneNumber', 'contactPerson', 'contactPersonAddress',
+    'photo', 'dateOfBirth', 'address'
+  ];
+  
+  let completed = 0;
+  let total = fields.length;
+  
+  fields.forEach(field => {
+    if (employee[field] && employee[field].toString().trim() !== '') {
+      completed++;
     }
-
-    const updated = await user.save();
-    const populatedUser = await Employee.findById(updated._id)
-      .populate("department", "name");
-
-    res.json(populatedUser);
-  })
-);
-// -------------------- Upload Profile Photo --------------------
-router.post(
-  "/upload-photo",
-  protect,
-  upload.single("photo"),
-  asyncHandler(async (req, res) => {
-    if (!req.file) {
-      res.status(400);
-      throw new Error("No photo uploaded");
-    }
-
-    const user = await Employee.findById(req.user._id);
-    if (!user) {
-      res.status(404);
-      throw new Error("User not found");
-    }
-
-    user.photo = `/uploads/photos/${req.file.filename}`;
-    await user.save();
-
-    res.json({
-      message: "Photo uploaded successfully",
-      photoUrl: user.photo
-    });
-  })
-);
+  });
+  
+  return Math.round((completed / total) * 100);
+};
 
 export default router;

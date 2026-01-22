@@ -22,20 +22,24 @@ import {
   FaFilter,
   FaDownload,
   FaClock,
+  FaUsers,
+  FaUserTie,
+  FaEdit,
+  FaPhone,
+  FaMapMarkerAlt,
 } from "react-icons/fa";
 
 const translations = {
   en: {
-    title: "Notifications",
+    title: "Department Head Notifications",
     loading: "Loading notifications...",
-    notAuthorized: "Not authorized",
+    notAuthorized: "Not authorized - Department Head access only",
     noNotifications: "No notifications yet",
     markSeen: "Mark as Read",
     delete: "Delete",
     viewDetails: "View Details",
     closeDetails: "Close Details",
     type: "Type",
-    requisitionId: "Requisition ID",
     employee: "Employee",
     email: "Email",
     department: "Department",
@@ -44,8 +48,6 @@ const translations = {
     reason: "Reason",
     status: "Status",
     phone: "Phone",
-    vacancy: "Vacancy",
-    applicant: "Applicant",
     unread: "Unread",
     all: "All",
     markAllRead: "Mark All as Read",
@@ -53,25 +55,12 @@ const translations = {
     notificationCount: "Notifications",
     newNotifications: "New notifications",
     leaveRequest: "Leave Request",
-    requisition: "Requisition",
+    employeeUpdate: "Employee Update",
     general: "General",
     urgent: "Urgent",
     markAllReadConfirm: "Mark all notifications as read?",
     deleteAllConfirm: "Delete all read notifications?",
-    workExperience: "Work Experience",
-    workExperienceRequest: "Work Experience Request",
-    workExperienceApproved: "Work Experience Approved",
-    workExperienceRejected: "Work Experience Rejected",
-    workExperienceLetter: "Work Experience Letter",
-    workExperienceLetterGenerated: "Work Experience Letter Generated",
-    workExperienceLetterUploaded: "Work Experience Letter Uploaded",
-    downloadLetter: "Download Letter",
-    viewLetter: "View Letter",
-    adminReason: "Admin Reason",
-    createdAt: "Request Date",
-    reviewedBy: "Reviewed By",
-    downloadCertificate: "Download Certificate",
-    clearAll: "Clear All",
+    createdAt: "Date",
     timeAgo: "ago",
     justNow: "Just now",
     minutes: "min",
@@ -82,18 +71,43 @@ const translations = {
     allCaughtUp: "All caught up!",
     markAll: "Mark All",
     deleteRead: "Delete Read",
+    clearAll: "Clear All",
+    employeeManagement: "Employee Management",
+    leaveManagement: "Leave Management",
+    forYourDepartment: "For Your Department",
+    actionRequired: "Action Required",
+    processed: "Processed",
+    pending: "Pending",
+    approved: "Approved",
+    rejected: "Rejected",
+    viewEmployee: "View Employee",
+    processLeave: "Process Leave",
+    details: "Details",
+    comments: "Comments",
+    startDate: "Start Date",
+    endDate: "End Date",
+    leaveType: "Leave Type",
+    emergencyContact: "Emergency Contact",
+    contactAddress: "Contact Address",
+    position: "Position",
+    employeeStatus: "Employee Status",
+    maritalStatus: "Marital Status",
+    dateOfBirth: "Date of Birth",
+    address: "Address",
+    updatedFields: "Updated Fields",
+    processedBy: "Processed By",
+    processedAt: "Processed At",
   },
   am: {
-    title: "ማሳወቂያዎች",
+    title: "የክፍል ሃላፊ ማሳወቂያዎች",
     loading: "ማሳወቂያዎች በመጫን ላይ...",
-    notAuthorized: "ፈቃድ የለዎትም",
+    notAuthorized: "ፈቃድ የለዎትም - የክፍል ሃላፊ ብቻ",
     noNotifications: "ምንም ማሳወቂያ የለም",
     markSeen: "እንደተነበበ ምልክት አድርግ",
     delete: "አጥፋ",
     viewDetails: "ዝርዝሮችን አሳይ",
     closeDetails: "ዝርዝሮችን ዝጋ",
     type: "ዓይነት",
-    requisitionId: "የጥያቄ መታወቂያ",
     employee: "ሰራተኛ",
     email: "ኢሜይል",
     department: "ክፍል",
@@ -102,8 +116,6 @@ const translations = {
     reason: "ምክንያት",
     status: "ሁኔታ",
     phone: "ስልክ",
-    vacancy: "የቦታ ክፍት",
-    applicant: "የወሰነ",
     unread: "ያልተነበበ",
     all: "ሁሉም",
     markAllRead: "ሁሉንም እንደተነበበ ምልክት አድርግ",
@@ -111,25 +123,12 @@ const translations = {
     notificationCount: "ማሳወቂያዎች",
     newNotifications: "አዲስ ማሳወቂያዎች",
     leaveRequest: "የፈቃድ ጥያቄ",
-    requisition: "ጥያቄ",
+    employeeUpdate: "የሰራተኛ አማራጭ",
     general: "አጠቃላይ",
     urgent: "አስቸኳይ",
     markAllReadConfirm: "ሁሉንም ማሳወቂያዎች እንደተነበቡ ምልክት ማድረግ ትፈልጋለህ?",
     deleteAllConfirm: "ሁሉንም ያልተነበቡ ማሳወቂያዎች ማጥፋት ትፈልጋለህ?",
-    workExperience: "የስራ ተሞክሮ",
-    workExperienceRequest: "የስራ ተሞክሮ ጥያቄ",
-    workExperienceApproved: "የስራ ተሞክሮ ጥያቄ ተፈቅዷል",
-    workExperienceRejected: "የስራ ተሞክሮ ጥያቄ ተቀባይነት አላገኘም",
-    workExperienceLetter: "የስራ ተሞክሮ ደብዳቤ",
-    workExperienceLetterGenerated: "የስራ ተሞክሮ ደብዳቤ ተፈጥሯል",
-    workExperienceLetterUploaded: "የስራ ተሞክሮ ደብዳቤ ተሰቅሏል",
-    downloadLetter: "ደብዳቤ አውርድ",
-    viewLetter: "ደብዳቤ አሳይ",
-    adminReason: "የአስተዳዳሪ ምክንያት",
-    createdAt: "የጥያቄ ቀን",
-    reviewedBy: "በእነዚህ ተፈትኗል",
-    downloadCertificate: "ማረጋገጫ አውርድ",
-    clearAll: "ሁሉንም አጥፋ",
+    createdAt: "ቀን",
     timeAgo: "በፊት",
     justNow: "አሁን",
     minutes: "ደቂቃ",
@@ -140,6 +139,32 @@ const translations = {
     allCaughtUp: "ሁሉም ተነትበዋል!",
     markAll: "ሁሉንም ምልክት አድርግ",
     deleteRead: "የተነበቡትን አጥፋ",
+    clearAll: "ሁሉንም አጥፋ",
+    employeeManagement: "የሰራተኛ አስተዳደር",
+    leaveManagement: "የፈቃድ አስተዳደር",
+    forYourDepartment: "ለክፍልዎ",
+    actionRequired: "ተግባር ያስፈልጋል",
+    processed: "ተሰርቷል",
+    pending: "በመጠባበቅ ላይ",
+    approved: "ተፈቅዷል",
+    rejected: "ተቀባይነት አላገኘም",
+    viewEmployee: "ሰራተኛ አሳይ",
+    processLeave: "ፈቃድ አስተናግድ",
+    details: "ዝርዝሮች",
+    comments: "አስተያየቶች",
+    startDate: "የመጀመሪያ ቀን",
+    endDate: "የመጨረሻ ቀን",
+    leaveType: "የፈቃድ አይነት",
+    emergencyContact: "የአደጋ ማንነት",
+    contactAddress: "የመገናኛ አድራሻ",
+    position: "ሥራ",
+    employeeStatus: "የሰራተኛ ሁኔታ",
+    maritalStatus: "የትዳር ሁኔታ",
+    dateOfBirth: "የልደት ቀን",
+    address: "አድራሻ",
+    updatedFields: "የተለወጡ መስኮች",
+    processedBy: "በሰራ",
+    processedAt: "በሰራበት ቀን",
   },
 };
 
@@ -161,23 +186,46 @@ const DeptHeadNotifications = () => {
   const unreadCount = notifications.filter(n => !n.seen).length;
   const readCount = notifications.filter(n => n.seen).length;
 
+  // Fetch notifications for department head - FIXED
   const fetchNotifications = async () => {
+    if (!user) return;
+    
     try {
+      console.log("Fetching notifications for department head:", user._id);
+      console.log("User role:", user.role);
+      
+      // FIXED: Always use the general notifications endpoint
       const res = await axiosInstance.get("/notifications/my");
-      setNotifications(res.data);
+      console.log("Fetched notifications:", res.data);
+      
+      // Filter to show only department head notifications
+      const deptHeadNotifications = Array.isArray(res.data) 
+        ? res.data.filter(notification => 
+            notification.recipientRole === "DepartmentHead" || 
+            notification.recipientRole === "departmenthead"
+          )
+        : [];
+      
+      console.log("Filtered department head notifications:", deptHeadNotifications);
+      setNotifications(deptHeadNotifications);
     } catch (err) {
       console.error("Error fetching notifications:", err);
+      console.error("Error details:", err.response?.data);
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!authLoading && user) fetchNotifications();
+    if (!authLoading && user) {
+      fetchNotifications();
+    }
   }, [user, authLoading]);
 
   const handleMarkSeen = async (id) => {
     try {
+      // FIXED: Always use the general notification endpoint
       await axiosInstance.put(`/notifications/${id}/seen`);
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, seen: true } : n))
@@ -190,11 +238,8 @@ const DeptHeadNotifications = () => {
   const handleMarkAllRead = async () => {
     if (!window.confirm(t.markAllReadConfirm)) return;
     try {
-      await Promise.all(
-        notifications
-          .filter(n => !n.seen)
-          .map(n => axiosInstance.put(`/notifications/${n._id}/seen`))
-      );
+      // FIXED: Always use the general endpoint
+      await axiosInstance.put("/notifications/mark-all-read");
       setNotifications(prev => prev.map(n => ({ ...n, seen: true })));
     } catch (err) {
       console.error("Error marking all as read:", err);
@@ -203,6 +248,7 @@ const DeptHeadNotifications = () => {
 
   const handleDelete = async (id) => {
     try {
+      // FIXED: Always use the general endpoint
       await axiosInstance.delete(`/notifications/${id}`);
       setNotifications((prev) => prev.filter((n) => n._id !== id));
     } catch (err) {
@@ -213,10 +259,8 @@ const DeptHeadNotifications = () => {
   const handleDeleteAllRead = async () => {
     if (!window.confirm(t.deleteAllConfirm)) return;
     try {
-      const readNotifications = notifications.filter(n => n.seen);
-      await Promise.all(
-        readNotifications.map(n => axiosInstance.delete(`/notifications/${n._id}`))
-      );
+      // FIXED: Always use the general endpoint
+      await axiosInstance.delete("/notifications/clear-read");
       setNotifications(prev => prev.filter(n => !n.seen));
     } catch (err) {
       console.error("Error deleting all read:", err);
@@ -226,22 +270,14 @@ const DeptHeadNotifications = () => {
   const handleDeleteAll = async () => {
     if (!window.confirm(language === "en" ? "Delete all notifications?" : "ሁሉንም ማሳወቂያዎች ማጥፋት ትፈልጋለህ?")) return;
     try {
-      await Promise.all(
-        notifications.map(n => axiosInstance.delete(`/notifications/${n._id}`))
+      // Delete all notifications one by one using the general endpoint
+      const deletePromises = notifications.map(n => 
+        axiosInstance.delete(`/notifications/${n._id}`)
       );
+      await Promise.all(deletePromises);
       setNotifications([]);
     } catch (err) {
       console.error("Error deleting all:", err);
-    }
-  };
-
-  const handleDownloadWorkExperienceLetter = async (notification) => {
-    if (!notification.relatedId) return;
-    try {
-      const downloadUrl = `${axiosInstance.defaults.baseURL}/work-experience/${notification.relatedId}/download`;
-      window.open(downloadUrl, '_blank');
-    } catch (error) {
-      console.error("Error downloading letter:", error);
     }
   };
 
@@ -259,6 +295,8 @@ const DeptHeadNotifications = () => {
   };
 
   const getTimeAgo = (date) => {
+    if (!date) return t.justNow;
+    
     const now = new Date();
     const then = new Date(date);
     const diffMs = now - then;
@@ -283,7 +321,7 @@ const DeptHeadNotifications = () => {
     );
   }
 
-  if (!user) {
+  if (!user || user.role.toLowerCase() !== "departmenthead") {
     return (
       <div className={`min-h-screen flex items-center justify-center ${darkMode ? "bg-gradient-to-br from-gray-900 to-gray-800" : "bg-gradient-to-br from-gray-50 to-gray-100"}`}>
         <p className={`text-lg ${darkMode ? "text-gray-300" : "text-gray-600"}`}>{t.notAuthorized}</p>
@@ -303,6 +341,10 @@ const DeptHeadNotifications = () => {
               </h1>
               <p className={`mt-2 ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
                 {notifications.length} {t.notificationCount} • {unreadCount} {t.newNotifications}
+              </p>
+              <p className={`text-sm mt-1 ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                <FaBuilding className="inline mr-2" />
+                {t.forYourDepartment}
               </p>
             </div>
 
@@ -352,14 +394,16 @@ const DeptHeadNotifications = () => {
             </div>
           </div>
 
-          <div className={`rounded-2xl p-6 ${darkMode ? "bg-gray-800/50 border border-gray-700" : "bg-white border border-gray-200 shadow-lg"}`}>
+          <div className={`rounded-2xl p-6 ${darkMode ? "bg-green-900/20 border border-green-800/30" : "bg-green-50 border border-green-100 shadow-lg"}`}>
             <div className="flex items-center justify-between">
               <div>
-                <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{language === "en" ? "Read" : "የተነበቡ"}</p>
-                <p className="text-3xl font-bold mt-2">{readCount}</p>
+                <p className={`text-sm ${darkMode ? "text-green-300" : "text-green-600"}`}>{language === "en" ? "Leave Requests" : "የፈቃድ ጥያቄዎች"}</p>
+                <p className="text-3xl font-bold mt-2">
+                  {notifications.filter(n => n.type === "Leave Request" || n.type === "Leave").length}
+                </p>
               </div>
-              <div className={`p-3 rounded-xl ${darkMode ? "bg-green-900/30" : "bg-green-100"}`}>
-                <FaCheck className={`text-xl ${darkMode ? "text-green-400" : "text-green-600"}`} />
+              <div className={`p-3 rounded-xl ${darkMode ? "bg-green-800/40" : "bg-green-200"}`}>
+                <FaCalendarAlt className={`text-xl ${darkMode ? "text-green-300" : "text-green-600"}`} />
               </div>
             </div>
           </div>
@@ -479,6 +523,11 @@ const DeptHeadNotifications = () => {
                                 {t.unread}
                               </span>
                             )}
+                            {notification.metadata?.actionRequired && (
+                              <span className="px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white text-xs rounded-full font-medium">
+                                {t.actionRequired}
+                              </span>
+                            )}
                             <span className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
                               <FaClock className="inline mr-1" />
                               {getTimeAgo(notification.createdAt)}
@@ -487,6 +536,12 @@ const DeptHeadNotifications = () => {
                           <p className={`${darkMode ? "text-gray-300" : "text-gray-700"} line-clamp-2`}>
                             {notification.message}
                           </p>
+                          {notification.metadata?.department && (
+                            <p className={`text-sm mt-1 ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                              <FaBuilding className="inline mr-1" />
+                              {notification.metadata.department}
+                            </p>
+                          )}
                         </div>
                       </div>
                       
@@ -498,16 +553,6 @@ const DeptHeadNotifications = () => {
                             title={t.markSeen}
                           >
                             <FaCheck className="w-4 h-4" />
-                          </button>
-                        )}
-                        
-                        {(notification.type?.includes("Work Experience Letter")) && (
-                          <button
-                            onClick={() => handleDownloadWorkExperienceLetter(notification)}
-                            className="p-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl hover:from-purple-600 hover:to-purple-700 transition-all shadow-md"
-                            title={t.downloadCertificate}
-                          >
-                            <FaDownload className="w-4 h-4" />
                           </button>
                         )}
                         
@@ -536,101 +581,7 @@ const DeptHeadNotifications = () => {
                     </div>
 
                     {/* Details Section */}
-                    {isActive && (
-                      <div className={`mt-6 p-6 rounded-xl ${darkMode ? "bg-gray-700/50" : "bg-gray-50"}`}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          {/* Left Column */}
-                          <div className="space-y-4">
-                            <h4 className={`font-semibold mb-3 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                              {language === "en" ? "Notification Details" : "የማሳወቂያ ዝርዝሮች"}
-                            </h4>
-                            
-                            <DetailItem
-                              icon={NotificationIcon}
-                              label={t.type}
-                              value={getNotificationTypeLabel(notification.type, t)}
-                              darkMode={darkMode}
-                            />
-                            
-                            {notification.status && (
-                              <DetailItem
-                                icon={notification.status === "approved" ? FaCheckCircle : 
-                                      notification.status === "rejected" ? FaTimesCircle : FaBell}
-                                label={t.status}
-                                value={notification.status}
-                                darkMode={darkMode}
-                              />
-                            )}
-
-                            {notification.createdAt && (
-                              <DetailItem
-                                icon={FaCalendarAlt}
-                                label={t.createdAt}
-                                value={new Date(notification.createdAt).toLocaleString()}
-                                darkMode={darkMode}
-                              />
-                            )}
-                          </div>
-
-                          {/* Right Column */}
-                          <div className="space-y-4">
-                            <h4 className={`font-semibold mb-3 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                              {language === "en" ? "Related Information" : "የተዛመደ መረጃ"}
-                            </h4>
-                            
-                            {notification.employee?.name && (
-                              <DetailItem
-                                icon={FaUser}
-                                label={t.employee}
-                                value={notification.employee.name}
-                                darkMode={darkMode}
-                              />
-                            )}
-                            
-                            {notification.department && (
-                              <DetailItem
-                                icon={FaBuilding}
-                                label={t.department}
-                                value={notification.department}
-                                darkMode={darkMode}
-                              />
-                            )}
-
-                            {notification.reason && (
-                              <DetailItem
-                                icon={FaFileAlt}
-                                label={t.reason}
-                                value={notification.reason}
-                                darkMode={darkMode}
-                              />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Download Certificate Section */}
-                        {(notification.type?.includes("Work Experience Letter")) && (
-                          <div className="mt-6 pt-6 border-t border-gray-700 dark:border-gray-600">
-                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                              <div>
-                                <p className={`font-semibold ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
-                                  {t.workExperienceLetter}
-                                </p>
-                                <p className={`text-sm mt-1 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
-                                  {notification.message}
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => handleDownloadWorkExperienceLetter(notification)}
-                                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white rounded-xl transition-all flex items-center gap-3 shadow-lg"
-                              >
-                                <FaFileSignature className="w-5 h-5" />
-                                {t.downloadCertificate}
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {isActive && renderNotificationDetails(notification, t, darkMode, language)}
                   </div>
                 </div>
               );
@@ -643,50 +594,278 @@ const DeptHeadNotifications = () => {
 };
 
 const getNotificationIcon = (type) => {
-  if (type?.includes("Work Experience")) {
-    return FaBriefcase;
-  } else if (type === "Leave") {
+  if (type === "Leave Request" || type === "Leave Status Update" || type === "Leave") {
     return FaCalendarAlt;
-  } else if (type === "Requisition") {
-    return FaFileAlt;
-  } else if (type === "urgent") {
-    return FaExclamationTriangle;
+  } else if (type === "Employee Updated") {
+    return FaUserTie;
+  } else if (type === "Employee Terminated") {
+    return FaUser;
+  } else if (type === "System") {
+    return FaBell;
   } else {
     return FaBell;
   }
 };
 
 const getNotificationColorClasses = (type, darkMode) => {
-  if (type?.includes("Work Experience")) {
+  if (type === "Leave Request" || type === "Leave Status Update" || type === "Leave") {
+    return darkMode ? "bg-blue-900/40 text-blue-400" : "bg-blue-100 text-blue-700";
+  } else if (type === "Employee Updated" || type === "Employee Terminated") {
     return darkMode ? "bg-purple-900/40 text-purple-400" : "bg-purple-100 text-purple-700";
   } else if (type === "urgent") {
     return darkMode ? "bg-red-900/40 text-red-400" : "bg-red-100 text-red-700";
-  } else if (type === "Leave") {
-    return darkMode ? "bg-blue-900/40 text-blue-400" : "bg-blue-100 text-blue-700";
-  } else if (type === "Requisition") {
-    return darkMode ? "bg-green-900/40 text-green-400" : "bg-green-100 text-green-700";
   } else {
     return darkMode ? "bg-gray-900/40 text-gray-400" : "bg-gray-100 text-gray-700";
   }
 };
 
 const getNotificationTypeLabel = (type, t) => {
-  if (type?.includes("Work Experience")) {
-    if (type === "Work Experience Request") return t.workExperienceRequest;
-    if (type === "Work Experience Approved") return t.workExperienceApproved;
-    if (type === "Work Experience Rejected") return t.workExperienceRejected;
-    if (type === "Work Experience Letter Generated") return t.workExperienceLetterGenerated;
-    if (type === "Work Experience Letter Uploaded") return t.workExperienceLetterUploaded;
-    return t.workExperience;
-  } else if (type === "Leave") {
-    return t.leaveRequest;
-  } else if (type === "Requisition") {
-    return t.requisition;
-  } else if (type === "urgent") {
-    return t.urgent;
-  } else {
-    return t.general;
+  // Use the correct language object
+  const language = localStorage.getItem('language') || 'en';
+  
+  if (type === "Leave Request" || type === "Leave Status Update" || type === "Leave") return t.leaveRequest;
+  if (type === "Employee Updated") return t.employeeUpdate;
+  if (type === "Employee Terminated") return language === "en" ? "Employee Terminated" : "ሰራተኛ ተሰርዟል";
+  if (type === "System") return t.general;
+  if (type === "urgent") return t.urgent;
+  return type || t.general;
+};
+
+const renderNotificationDetails = (notification, t, darkMode, language) => {
+  const { type, metadata } = notification;
+  
+  if (type === "Leave Request" || type === "Leave Status Update" || type === "Leave") {
+    return (
+      <div className={`mt-6 p-6 rounded-xl ${darkMode ? "bg-blue-900/10" : "bg-blue-50"}`}>
+        <h4 className={`font-semibold mb-4 text-lg ${darkMode ? "text-blue-300" : "text-blue-700"}`}>
+          <FaCalendarAlt className="inline mr-2" />
+          {t.leaveRequest} {t.details}
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <DetailItem
+              icon={FaUser}
+              label={t.employee}
+              value={metadata?.employeeName || notification.message?.split(' ')[0] + ' ' + notification.message?.split(' ')[1]}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaBuilding}
+              label={t.department}
+              value={metadata?.department || notification.metadata?.department}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaCalendarAlt}
+              label={t.leaveType}
+              value={metadata?.leaveType || "Annual Leave"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaCheckCircle}
+              label={t.status}
+              value={metadata?.status ? t[metadata.status] : t.pending}
+              darkMode={darkMode}
+            />
+          </div>
+          
+          <div className="space-y-4">
+            <DetailItem
+              icon={FaCalendarAlt}
+              label={t.startDate}
+              value={metadata?.startDate ? formatDate(metadata.startDate) : "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaCalendarAlt}
+              label={t.endDate}
+              value={metadata?.endDate ? formatDate(metadata.endDate) : "N/A"}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaFileAlt}
+              label={t.reason}
+              value={metadata?.reason || notification.message}
+              darkMode={darkMode}
+            />
+            
+            {metadata?.adminComment && (
+              <DetailItem
+                icon={FaInfoCircle}
+                label={t.comments}
+                value={metadata.adminComment}
+                darkMode={darkMode}
+              />
+            )}
+          </div>
+        </div>
+        
+        {metadata?.status === "pending" && (
+          <div className="mt-6 pt-6 border-t border-gray-700 dark:border-gray-600">
+            <p className={`font-semibold mb-3 ${darkMode ? "text-yellow-300" : "text-yellow-600"}`}>
+              <FaExclamationTriangle className="inline mr-2" />
+              {t.actionRequired}
+            </p>
+            <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
+              {language === "en" 
+                ? "This leave request requires your approval. Please process it in the Leave Management section."
+                : "ይህ የፈቃድ ጥያቄ የእርስዎ ፍቃድ ያስፈልገዋል። እባክዎን በፈቃድ አስተዳደር ክፍል ውስጥ ያስተናግዱት።"}
+            </p>
+          </div>
+        )}
+      </div>
+    );
   }
+  
+  if (type === "Employee Updated" || type === "Employee Terminated") {
+    return (
+      <div className={`mt-6 p-6 rounded-xl ${darkMode ? "bg-purple-900/10" : "bg-purple-50"}`}>
+        <h4 className={`font-semibold mb-4 text-lg ${darkMode ? "text-purple-300" : "text-purple-700"}`}>
+          <FaUserTie className="inline mr-2" />
+          {type === "Employee Updated" ? t.employeeUpdate : language === "en" ? "Employee Termination" : "የሰራተኛ መጨረሻ"} {t.details}
+        </h4>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-4">
+            <DetailItem
+              icon={FaUser}
+              label={t.employee}
+              value={metadata?.employeeName || notification.message?.split(' ')[1] + ' ' + notification.message?.split(' ')[2]}
+              darkMode={darkMode}
+            />
+            
+            <DetailItem
+              icon={FaBuilding}
+              label={t.department}
+              value={metadata?.department || notification.metadata?.department}
+              darkMode={darkMode}
+            />
+            
+            {metadata?.updatedFields && (
+              <DetailItem
+                icon={FaEdit}
+                label={t.updatedFields}
+                value={Array.isArray(metadata.updatedFields) ? metadata.updatedFields.join(', ') : metadata.updatedFields}
+                darkMode={darkMode}
+              />
+            )}
+            
+            {metadata?.updatedBy && (
+              <DetailItem
+                icon={FaUserTie}
+                label={t.processedBy}
+                value={metadata.updatedBy}
+                darkMode={darkMode}
+              />
+            )}
+          </div>
+          
+          <div className="space-y-4">
+            {metadata?.employeeStatus && (
+              <DetailItem
+                icon={FaCheckCircle}
+                label={t.employeeStatus}
+                value={metadata.employeeStatus}
+                darkMode={darkMode}
+              />
+            )}
+            
+            {metadata?.position && (
+              <DetailItem
+                icon={FaBriefcase}
+                label={t.position}
+                value={metadata.position}
+                darkMode={darkMode}
+              />
+            )}
+            
+            {metadata?.updatedAt && (
+              <DetailItem
+                icon={FaCalendarAlt}
+                label={t.processedAt}
+                value={formatDateTime(metadata.updatedAt)}
+                darkMode={darkMode}
+              />
+            )}
+            
+            {type === "Employee Terminated" && metadata?.terminationDate && (
+              <DetailItem
+                icon={FaCalendarAlt}
+                label={language === "en" ? "Termination Date" : "የመጨረሻ ቀን"}
+                value={formatDate(metadata.terminationDate)}
+                darkMode={darkMode}
+              />
+            )}
+          </div>
+        </div>
+        
+        {notification.message && (
+          <div className="mt-6 pt-6 border-t border-gray-700 dark:border-gray-600">
+            <DetailItem
+              icon={FaFileAlt}
+              label={t.details}
+              value={notification.message}
+              darkMode={darkMode}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  // Default notification details
+  return (
+    <div className={`mt-6 p-6 rounded-xl ${darkMode ? "bg-gray-800" : "bg-gray-100"}`}>
+      <h4 className={`font-semibold mb-4 ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
+        {language === "en" ? "Notification Details" : "የማሳወቂያ ዝርዝሮች"}
+      </h4>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <DetailItem
+            icon={getNotificationIcon(notification.type)}
+            label={t.type}
+            value={getNotificationTypeLabel(notification.type, t)}
+            darkMode={darkMode}
+          />
+          
+          <DetailItem
+            icon={FaCalendarAlt}
+            label={t.createdAt}
+            value={formatDateTime(notification.createdAt)}
+            darkMode={darkMode}
+          />
+          
+          {notification.senderRole && (
+            <DetailItem
+              icon={FaUser}
+              label={language === "en" ? "Sender Role" : "የላኪ ሚና"}
+              value={notification.senderRole}
+              darkMode={darkMode}
+            />
+          )}
+        </div>
+        
+        <div className="space-y-4">
+          {notification.metadata && Object.entries(notification.metadata).map(([key, value]) => (
+            <DetailItem
+              key={key}
+              icon={FaInfoCircle}
+              label={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+              value={typeof value === 'object' ? JSON.stringify(value) : String(value)}
+              darkMode={darkMode}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const DetailItem = ({ icon: Icon, label, value, darkMode }) => {
@@ -706,7 +885,7 @@ const DetailItem = ({ icon: Icon, label, value, darkMode }) => {
           </div>
         )}
       </div>
-      <div>
+      <div className="flex-1">
         <p className={`text-sm ${darkMode ? "text-gray-400" : "text-gray-500"}`}>{label}</p>
         <p className={`font-medium ${darkMode ? "text-gray-300" : "text-gray-700"}`}>
           {value || <span className={`italic ${darkMode ? "text-gray-500" : "text-gray-400"}`}>N/A</span>}
@@ -714,6 +893,29 @@ const DetailItem = ({ icon: Icon, label, value, darkMode }) => {
       </div>
     </div>
   );
+};
+
+// Helper functions used in renderNotificationDetails
+const formatDate = (dateString) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+const formatDateTime = (dateString) => {
+  if (!dateString) return "N/A";
+  const date = new Date(dateString);
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 export default DeptHeadNotifications;
